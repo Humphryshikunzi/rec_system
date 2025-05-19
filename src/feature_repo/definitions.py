@@ -1,7 +1,7 @@
 # This file serves as the entry point for Feast to discover your feature definitions.
 # Import all your defined entities, data sources, and feature views here.
 
-from .data_sources import (
+from data_sources import (
     users_source, # Original source, may or may not be used by a FV
     posts_source, # Original source, may or may not be used by a FV
     interactions_source, # Original source, likely superseded for FVs by aggregated sources
@@ -11,12 +11,12 @@ from .data_sources import (
     post_aggregated_derived_features_source,
 )
 
-from .entities import (
+from entities import (
     user,
     post
 )
 
-from .feature_views import (
+from feature_views import (
     user_profile_features_view, # Updated view for user embeddings
     post_details_features_view, # Updated view for post embeddings
     user_aggregated_stats_view, # New view for user aggregated features

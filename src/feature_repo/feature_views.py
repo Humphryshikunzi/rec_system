@@ -1,10 +1,10 @@
 from datetime import timedelta
-from feast import FeatureView, Field, ValueType
-from feast.types import String, Int64, Float32List, UnixTimestamp, Float64 # Added Float64 for post_age_hours if needed
+from feast import FeatureView, Field
+from feast.types import String, Int64, UnixTimestamp, Float64, Float32, Array # Added Float64, Float32, Array
 
 # Import entities and data sources
-from .entities import user, post
-from .data_sources import (
+from entities import user, post
+from data_sources import (
     users_source, # Kept for now if any feature view still uses it, but new ones use parquet
     posts_source, # Kept for now
     # interactions_source, # Likely superseded by aggregated sources
@@ -30,8 +30,8 @@ user_profile_features_view = FeatureView(
         # If it's a string list in parquet, Feast might infer it or it might need specific handling.
         # For Parquet, Feast often infers types like lists of strings/floats correctly.
         Field(name="onboarding_category_ids", dtype=String), # Or appropriate list type if applicable
-        Field(name="about_embedding", dtype=ValueType.FLOAT_LIST), # Using ValueType as per instructions
-        Field(name="headline_embedding", dtype=ValueType.FLOAT_LIST),
+        Field(name="about_embedding", dtype=Array(Float32)),
+        Field(name="headline_embedding", dtype=Array(Float32)),
         # Other original user columns from users.csv if they are in users_with_embeddings.parquet
         # and needed as features directly can be listed here.
         # Example: Field(name="some_original_user_column", dtype=String),
@@ -52,7 +52,7 @@ post_details_features_view = FeatureView(
         Field(name="creator_id", dtype=String), # Links to user entity
         # 'creation_timestamp' is the timestamp_field of posts_with_embeddings_source
         Field(name="creation_timestamp", dtype=UnixTimestamp),
-        Field(name="description_embedding", dtype=ValueType.FLOAT_LIST),
+        Field(name="description_embedding", dtype=Array(Float32)),
         # Other original post columns from posts.csv if they are in posts_with_embeddings.parquet
         # and needed as features directly can be listed here.
     ],
