@@ -105,3 +105,6 @@ media/
 
 
 /artifacts
+/mlruns
+/post_tower_*
+/user_tower_*
