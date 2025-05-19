@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/d1460aeb0c2940c6b55c99fe22570cc2/artifacts
+end_time: 1747673615849
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: d1460aeb0c2940c6b55c99fe22570cc2
+run_name: handsome-dog-965
+run_uuid: d1460aeb0c2940c6b55c99fe22570cc2
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747673578522
+status: 4
+tags: []
+user_id: humphry

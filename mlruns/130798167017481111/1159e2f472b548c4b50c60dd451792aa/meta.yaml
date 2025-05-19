@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/1159e2f472b548c4b50c60dd451792aa/artifacts
+end_time: 1747672426227
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 1159e2f472b548c4b50c60dd451792aa
+run_name: auspicious-rook-965
+run_uuid: 1159e2f472b548c4b50c60dd451792aa
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747672389080
+status: 4
+tags: []
+user_id: humphry

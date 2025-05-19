@@ -1,4 +1,5 @@
 import argparse
+import pandas as pd
 import yaml
 import os
 import numpy as np
@@ -6,7 +7,7 @@ import tensorflow as tf
 import mlflow
 import mlflow.tensorflow
 from feast import FeatureStore
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from model import UserTower, PostTower # TwoTowerModel (if used directly) or TFRS wrapper
 import data_utils # Assuming data_utils.py is in the same directory
@@ -138,7 +139,7 @@ def main(config_path):
         if os.path.exists(posts_df_path):
             posts_df = pd.read_csv(posts_df_path)
             category_id_vocab_size = posts_df['category_id'].nunique() + 2 
-            media_type_vocab_size = posts_df['mediaType'].nunique() + 2
+            media_type_vocab_size = posts_df['media_type'].nunique() + 2
             creator_id_vocab_size = posts_df['creator_id'].nunique() + 2 # Assuming creator_id is like user_id
         else:
             print(f"Warning: {posts_df_path} not found. Using placeholder vocab sizes for category, media_type, creator_id.")
@@ -186,22 +187,24 @@ def main(config_path):
         # --- 2. Define Model ---
         embedding_dim = config['embedding_dim']
         user_tower = UserTower(
-            user_id_vocab_size=user_id_vocab_size, # Max user_id + 1 (or from StringLookup)
+            user_id_vocab_list=all_user_ids_list, # Pass the list of string user IDs
             embedding_dim=embedding_dim
         )
         post_tower = PostTower(
-            post_id_vocab_size=post_id_vocab_size, # Max post_id + 1
-            category_id_vocab_size=category_id_vocab_size, # Max category_id + 1
-            media_type_vocab_size=media_type_vocab_size, # Max media_type_id + 1
-            creator_id_vocab_size=creator_id_vocab_size, # Max creator_id + 1
+            post_id_vocab_list=all_post_ids_list, # Pass the list of string post IDs
+            category_id_vocab_size=category_id_vocab_size,
+            media_type_vocab_size=media_type_vocab_size,
+            creator_id_vocab_size=creator_id_vocab_size,
             embedding_dim=embedding_dim
         )
-
+    
         # For TFRS, we need a dataset of all candidate items (posts) to compute embeddings for the FactorizedTopK metric.
         # This involves fetching features for ALL posts.
         print("Preparing dataset for all post candidates (for TFRS FactorizedTopK metric)...")
         all_post_ids_df = pd.DataFrame({'post_id': all_post_ids_list})
-        all_post_ids_df['event_timestamp'] = pd.to_datetime(datetime.utcnow() - timedelta(seconds=1)) # Dummy timestamp
+        all_post_ids_df['event_timestamp'] = pd.to_datetime(datetime.now()) # Use current time
+        print(f"DEBUG: Entity DF for all_posts_features lookup:\n{all_post_ids_df.head()}")
+        print(f"DEBUG: Requesting features: {post_feature_list_config}")
 
         # Fetch features for all posts
         all_posts_features_df = store.get_historical_features(
@@ -212,60 +215,116 @@ def main(config_path):
                 # "post_features_view:creator_id"
             ]
         ).to_df()
+        print(f"DEBUG: all_posts_features_df shape after get_historical_features: {all_posts_features_df.shape}")
+        print(f"DEBUG: all_posts_features_df head after get_historical_features:\n{all_posts_features_df.head()}")
         
         # Merge with posts_df to get category_id, mediaType, creator_id if not from Feast
         # This assumes these IDs are directly in posts_df and need to be included for the post_tower
         if os.path.exists(posts_df_path):
-            base_posts_info_df = pd.read_csv(posts_df_path)[['post_id', 'category_id', 'mediaType', 'creator_id']].drop_duplicates(subset=['post_id'])
+            base_posts_info_df = pd.read_csv(posts_df_path)[['post_id', 'category_id', 'media_type', 'creator_id']].drop_duplicates(subset=['post_id'])
             # Rename mediaType to media_type to match model expectation
             base_posts_info_df.rename(columns={'mediaType': 'media_type'}, inplace=True)
             all_posts_features_df = pd.merge(all_posts_features_df, base_posts_info_df, on='post_id', how='left')
         
-        # Fill NaNs for categorical IDs (important for embedding layers)
-        # And for pre-computed embeddings (e.g., description_embedding)
-        # This logic should mirror parts of data_utils.fetch_features_for_training's NaN handling
-        for col in ['category_id', 'media_type', 'creator_id']:
-            if col in all_posts_features_df.columns:
-                all_posts_features_df[col] = all_posts_features_df[col].fillna(0).astype(int)
+        # Handle potential suffixed column names from Feast joins (e.g., 'category_id_x')
+        # These are the base names of categorical features we expect.
+        categorical_base_names = ['category_id', 'media_type', 'creator_id']
+        rename_map = {}
+        for base_name in categorical_base_names:
+            suffixed_x = base_name + '_x'
+            suffixed_y = base_name + '_y'
+            if suffixed_x in all_posts_features_df.columns:
+                rename_map[suffixed_x] = base_name
+            elif suffixed_y in all_posts_features_df.columns: # Check for _y if _x isn't present
+                rename_map[suffixed_y] = base_name
         
-        desc_emb_col = 'description_embedding' # from "post_features_view:description_embedding"
+        if rename_map:
+            print(f"INFO: Renaming suffixed columns in all_posts_features_df: {rename_map}")
+            all_posts_features_df.rename(columns=rename_map, inplace=True)
+
+        # Process categorical features (fillna, astype) using the now-standardized base names
+        for col in categorical_base_names:
+            if col in all_posts_features_df.columns:
+                all_posts_features_df[col] = all_posts_features_df[col].fillna(0) # Default for missing categorical
+                try:
+                    # Ensure it's not all NaNs before astype if fillna(0) wasn't sufficient or if it was already non-numeric
+                    if not all_posts_features_df[col].isnull().all():
+                         all_posts_features_df[col] = all_posts_features_df[col].astype(int)
+                except ValueError:
+                    print(f"Warning: Could not convert column '{col}' to int after fillna. It might contain non-numeric strings (e.g. 'cat_01'). Vocabularies should handle this.")
+            else:
+                print(f"Warning: Expected categorical column '{col}' not found after potential renaming. Skipping fillna/astype.")
+
+        # Process description_embedding
+        desc_emb_col = 'description_embedding'
+        # Use the actual dimension for description_embedding, not the general embedding_dim
+        # This should be consistent with how description_embedding is generated/stored.
+        # Defaulting to 384 if not specified in config, as used in the pre-build step.
+        actual_desc_emb_dim = config.get('description_embedding_dim', 384)
+
         if desc_emb_col in all_posts_features_df.columns:
-            # Simplified NaN fill for embeddings - use a zero vector of embedding_dim
-            # A more robust way would be to get the actual dimension from a valid embedding
-            zero_emb = np.zeros(embedding_dim)
+            zero_emb = np.zeros(actual_desc_emb_dim)
             all_posts_features_df[desc_emb_col] = all_posts_features_df[desc_emb_col].apply(
-                lambda x: x if isinstance(x, (list, np.ndarray)) and len(x) == embedding_dim else zero_emb
+                lambda x: x if isinstance(x, (list, np.ndarray)) and len(x) == actual_desc_emb_dim else zero_emb
             )
-        all_posts_features_df.dropna(inplace=True) # Drop if any critical feature is still NaN
+        
+        # Drop rows if critical features like 'post_id' or 'description_embedding' are still NaN
+        # (though description_embedding should be filled with zero_emb if it was NaN).
+        # Categorical features have defaults, so they shouldn't cause row drops here if only they were NaN.
+        critical_cols_for_dropna = ['post_id']
+        if desc_emb_col in all_posts_features_df.columns: # Add if it exists
+            critical_cols_for_dropna.append(desc_emb_col)
+        all_posts_features_df.dropna(subset=critical_cols_for_dropna, inplace=True)
 
         if all_posts_features_df.empty:
-            raise ValueError("No post features could be fetched or prepared for TFRS candidates. Check Feast setup and post data.")
+            raise ValueError("No post features remained after NaN handling for TFRS candidates. Check Feast setup, post data, and embedding dimensions.")
 
         # Create a tf.data.Dataset for all posts
-        # This dataset should yield dictionaries compatible with post_tower's input expectations
         post_candidates_dict = {'post_id': all_posts_features_df['post_id'].values}
-        # Add other features expected by PostTower
-        post_model_feature_keys = [f.split(':')[1] for f in post_feature_list_config] # Base names from config
-        # Explicitly add categorical keys the model expects if not in config list
-        expected_post_model_keys = ['description_embedding', 'category_id', 'media_type', 'creator_id'] 
         
-        for key in post_model_feature_keys + expected_post_model_keys:
-            if key not in post_candidates_dict and key in all_posts_features_df.columns:
-                if isinstance(all_posts_features_df[key].iloc[0], (list, np.ndarray)):
-                    post_candidates_dict[key] = np.stack(all_posts_features_df[key].values)
+        # Base names from config (e.g., 'description_embedding', 'category_id')
+        post_model_feature_keys_from_config = [f.split(':')[1] for f in post_feature_list_config]
+        
+        # Define all keys expected by the PostTower model, using base names
+        # This includes embeddings and the processed categorical features
+        expected_post_model_keys = [desc_emb_col] + categorical_base_names
+        
+        # Combine and deduplicate all keys to iterate over
+        all_keys_to_add_to_dict = list(dict.fromkeys(post_model_feature_keys_from_config + expected_post_model_keys))
+
+        for key in all_keys_to_add_to_dict:
+            if key == 'post_id': # Already added
+                continue
+            if key in all_posts_features_df.columns:
+                if not all_posts_features_df[key].empty and not all_posts_features_df[key].isnull().all():
+                    # Use dropna().iloc[0] to get a valid non-NaN element for type check, robust to NaNs at the start
+                    first_valid_item = all_posts_features_df[key].dropna().iloc[0] if not all_posts_features_df[key].dropna().empty else None
+                    if first_valid_item is not None and isinstance(first_valid_item, (list, np.ndarray)):
+                        # For lists/arrays (embeddings), stack them. Ensure all items are consistent.
+                        # This might require padding/truncating if lengths vary and zero_emb fill wasn't exhaustive.
+                        try:
+                            post_candidates_dict[key] = np.stack(all_posts_features_df[key].values)
+                        except Exception as e:
+                            print(f"Error stacking column '{key}': {e}. Check embedding consistency.")
+                            # Fallback or raise error
+                            # For now, let's add it as is and let TF complain if it's ragged.
+                            post_candidates_dict[key] = all_posts_features_df[key].values
+                    else: # For scalar features
+                        post_candidates_dict[key] = all_posts_features_df[key].values
                 else:
-                    post_candidates_dict[key] = all_posts_features_df[key].values
-            elif key not in post_candidates_dict and key not in all_posts_features_df.columns:
-                 print(f"Warning: Candidate post feature '{key}' not found in all_posts_features_df. It might be missing for TFRS candidates.")
+                     print(f"Warning: Candidate post feature '{key}' is empty or all NaNs in all_posts_features_df. Skipping for TFRS candidates dict.")
+            else:
+                 print(f"Warning: Candidate post feature '{key}' (expected by model or from config) not found in all_posts_features_df columns. Missing for TFRS candidates dict.")
 
-
-        # Ensure all required keys for post_tower are present
-        for req_key in ['post_id', 'description_embedding', 'category_id', 'media_type', 'creator_id']:
+        # Ensure all keys truly required by the TFRS setup (especially PostTower inputs) are present
+        required_tfrs_keys = ['post_id', desc_emb_col] + categorical_base_names
+        for req_key in required_tfrs_keys:
             if req_key not in post_candidates_dict:
-                 raise ValueError(f"Required key '{req_key}' missing in post_candidates_dict for TFRS. Available: {post_candidates_dict.keys()}")
+                 # This check is critical. If a key is missing here, the model will likely fail.
+                 raise ValueError(f"CRITICAL: Required key '{req_key}' missing in post_candidates_dict for TFRS. Available keys: {list(post_candidates_dict.keys())}. DataFrame columns: {all_posts_features_df.columns.tolist()}")
 
         post_candidates_dataset = tf.data.Dataset.from_tensor_slices(post_candidates_dict)
-        print(f"Post candidates dataset created with {len(all_posts_features_df)} items.")
+        print(f"Post candidates dataset created with {len(all_posts_features_df)} items. Keys: {list(post_candidates_dict.keys())}")
 
 
         # Instantiate TFRS model
@@ -281,14 +340,18 @@ def main(config_path):
         # The user_feature_keys and post_feature_keys in config are "view:feature".
         # The TFRSTwoTowerModel will use these to find the corresponding data in the batch.
 
+        # Removing the explicit PostTower pre-build block as it was causing issues
+        # and the FactorizedTopK candidate computation should build it correctly.
+        # The main issue seems to be data consistency for the training loop.
+
         model = TFRSTwoTowerModel(
             user_tower=user_tower,
             post_tower=post_tower,
-            user_id_key='user_id', # Key name in the dataset from data_utils
-            post_id_key='post_id', # Key name in the dataset from data_utils
-            user_feature_keys=user_feature_list_config, # Full "view:feature" from config
-            post_feature_keys=post_feature_list_config, # Full "view:feature" from config
-            all_post_ids_for_candidates=all_post_ids_list, # Not directly used by TFRS task if post_dataset provided
+            user_id_key='user_id',
+            post_id_key='post_id',
+            user_feature_keys=user_feature_list_config,
+            post_feature_keys=post_feature_list_config,
+            all_post_ids_for_candidates=all_post_ids_list,
             post_dataset_for_candidates=post_candidates_dataset
         )
         
@@ -314,27 +377,47 @@ def main(config_path):
 
         # --- 4. Save and Log Model Components ---
         print("Saving model components...")
+
+        # Define example inputs for MLflow model signatures
+        # User Tower Example Input
+        # Assuming about_embedding and headline_embedding have the same dimension as config['embedding_dim']
+        # If they have different, pre-defined dimensions, those should be used.
+        # For this example, let's use config['embedding_dim'] for them.
+        user_emb_dim = config['embedding_dim'] # Common dimension for user's own embeddings
+        user_inputs_example_for_signature = {
+            "user_id": tf.constant(["u_example_001"], dtype=tf.string).numpy(), # Convert to numpy
+            "about_embedding": tf.random.normal(shape=(1, user_emb_dim)).numpy(),
+            "headline_embedding": tf.random.normal(shape=(1, user_emb_dim)).numpy()
+        }
+
+        # Post Tower Example Input
+        actual_desc_emb_dim = config.get('description_embedding_dim', 384)
+        post_inputs_example_for_signature = {
+            "post_id": tf.constant(["p_example_001"], dtype=tf.string).numpy(), # Convert to numpy
+            "description_embedding": tf.random.normal(shape=(1, actual_desc_emb_dim)).numpy(),
+            "category_id": tf.constant([0], dtype=tf.int64).numpy(),
+            "media_type": tf.constant([0], dtype=tf.int64).numpy(),
+            "creator_id": tf.constant([0], dtype=tf.int64).numpy()
+        }
         
         # Save user tower
-        user_tower_path = f"user_tower_{run_id}" 
-        user_tower.save(user_tower_path) # Saves in TensorFlow SavedModel format
+        user_tower_path = f"user_tower_{run_id}"
+        user_tower.export(user_tower_path) # Use export for SavedModel format
         mlflow.tensorflow.log_model(
-            tf_saved_model_dir=user_tower_path,
-            tf_meta_graph_tags=[tf.saved_model.SERVING],
-            tf_signature_def_key="serving_default", # Check signature from user_tower.call
+            model=user_tower,
             artifact_path="user_tower",
+            input_example=user_inputs_example_for_signature,
             registered_model_name=f"{config['mlflow_experiment_name']}-UserTower"
         )
         print(f"User tower saved and logged to MLflow as 'user_tower' and registered as {config['mlflow_experiment_name']}-UserTower.")
 
         # Save post tower
         post_tower_path = f"post_tower_{run_id}"
-        post_tower.save(post_tower_path)
+        post_tower.export(post_tower_path)
         mlflow.tensorflow.log_model(
-            tf_saved_model_dir=post_tower_path,
-            tf_meta_graph_tags=[tf.saved_model.SERVING],
-            tf_signature_def_key="serving_default", # Check signature from post_tower.call
+            model=post_tower,
             artifact_path="post_tower",
+            input_example=post_inputs_example_for_signature,
             registered_model_name=f"{config['mlflow_experiment_name']}-PostTower"
         )
         print(f"Post tower saved and logged to MLflow as 'post_tower' and registered as {config['mlflow_experiment_name']}-PostTower.")

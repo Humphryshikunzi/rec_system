@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/9040f085b0bc43338b865979f6e9fafe/artifacts
+end_time: 1747668745597
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 9040f085b0bc43338b865979f6e9fafe
+run_name: kindly-snipe-598
+run_uuid: 9040f085b0bc43338b865979f6e9fafe
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747668730701
+status: 4
+tags: []
+user_id: humphry

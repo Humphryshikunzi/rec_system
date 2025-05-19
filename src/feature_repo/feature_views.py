@@ -36,7 +36,7 @@ user_profile_features_view = FeatureView(
         # and needed as features directly can be listed here.
         # Example: Field(name="some_original_user_column", dtype=String),
     ],
-    ttl=timedelta(days=30),
+    # ttl=timedelta(days=30), # Temporarily commented out for debugging
     description="User profile features including text embeddings."
 )
 
@@ -56,7 +56,7 @@ post_details_features_view = FeatureView(
         # Other original post columns from posts.csv if they are in posts_with_embeddings.parquet
         # and needed as features directly can be listed here.
     ],
-    ttl=timedelta(days=30),
+    # ttl=timedelta(days=30), # Temporarily commented out for debugging
     description="Post detail features including text embeddings."
 )
 
@@ -74,7 +74,7 @@ user_aggregated_stats_view = FeatureView(
         Field(name="num_likes_received_on_posts", dtype=Int64),
         # event_timestamp is the source's timestamp_field
     ],
-    ttl=timedelta(days=7), # Shorter TTL for frequently updated aggregates
+    # ttl=timedelta(days=7), # Temporarily commented out for debugging
     description="Aggregated statistical features for users."
 )
 
@@ -92,7 +92,7 @@ post_aggregated_derived_stats_view = FeatureView(
         # creation_timestamp from the source parquet is also available if needed as a feature
         Field(name="creation_timestamp", dtype=UnixTimestamp), # If needed as a feature itself
     ],
-    ttl=timedelta(days=7),
+    # ttl=timedelta(days=7), # Temporarily commented out for debugging
     description="Aggregated and derived statistical features for posts."
 )
 

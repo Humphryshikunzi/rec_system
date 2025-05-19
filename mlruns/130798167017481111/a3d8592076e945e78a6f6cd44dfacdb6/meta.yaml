@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/a3d8592076e945e78a6f6cd44dfacdb6/artifacts
+end_time: 1747669113272
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: a3d8592076e945e78a6f6cd44dfacdb6
+run_name: orderly-auk-323
+run_uuid: a3d8592076e945e78a6f6cd44dfacdb6
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747669092019
+status: 4
+tags: []
+user_id: humphry

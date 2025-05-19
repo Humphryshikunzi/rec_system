@@ -1,0 +1,6 @@
+artifact_location: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111
+creation_time: 1747666073720
+experiment_id: '130798167017481111'
+last_update_time: 1747666073720
+lifecycle_stage: active
+name: TwoTowerRecommender

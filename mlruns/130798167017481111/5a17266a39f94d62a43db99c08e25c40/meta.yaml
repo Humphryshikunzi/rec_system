@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/5a17266a39f94d62a43db99c08e25c40/artifacts
+end_time: 1747668918060
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 5a17266a39f94d62a43db99c08e25c40
+run_name: zealous-fish-228
+run_uuid: 5a17266a39f94d62a43db99c08e25c40
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747668903208
+status: 4
+tags: []
+user_id: humphry

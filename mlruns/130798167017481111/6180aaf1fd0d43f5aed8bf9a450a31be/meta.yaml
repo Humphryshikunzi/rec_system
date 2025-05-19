@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/6180aaf1fd0d43f5aed8bf9a450a31be/artifacts
+end_time: 1747672256354
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 6180aaf1fd0d43f5aed8bf9a450a31be
+run_name: enthused-cow-682
+run_uuid: 6180aaf1fd0d43f5aed8bf9a450a31be
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747672217872
+status: 4
+tags: []
+user_id: humphry

@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/3771b9b9ed194035b69a99f49cd506c0/artifacts
+end_time: 1747668199884
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 3771b9b9ed194035b69a99f49cd506c0
+run_name: intelligent-owl-513
+run_uuid: 3771b9b9ed194035b69a99f49cd506c0
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747668193890
+status: 4
+tags: []
+user_id: humphry

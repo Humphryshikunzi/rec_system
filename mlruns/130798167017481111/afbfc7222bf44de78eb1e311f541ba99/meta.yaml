@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/afbfc7222bf44de78eb1e311f541ba99/artifacts
+end_time: 1747671781197
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: afbfc7222bf44de78eb1e311f541ba99
+run_name: clean-squirrel-197
+run_uuid: afbfc7222bf44de78eb1e311f541ba99
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747671760840
+status: 4
+tags: []
+user_id: humphry

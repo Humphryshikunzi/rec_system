@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/953860be78c34133b40d3fe432fabc3e/artifacts
+end_time: 1747669602646
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 953860be78c34133b40d3fe432fabc3e
+run_name: overjoyed-mule-611
+run_uuid: 953860be78c34133b40d3fe432fabc3e
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747669579437
+status: 4
+tags: []
+user_id: humphry

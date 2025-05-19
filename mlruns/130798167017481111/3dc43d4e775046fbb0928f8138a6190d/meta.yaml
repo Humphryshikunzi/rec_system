@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/3dc43d4e775046fbb0928f8138a6190d/artifacts
+end_time: 1747672963224
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 3dc43d4e775046fbb0928f8138a6190d
+run_name: adorable-stag-692
+run_uuid: 3dc43d4e775046fbb0928f8138a6190d
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747672799229
+status: 4
+tags: []
+user_id: humphry

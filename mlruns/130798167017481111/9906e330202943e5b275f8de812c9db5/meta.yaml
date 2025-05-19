@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/9906e330202943e5b275f8de812c9db5/artifacts
+end_time: 1747668818151
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 9906e330202943e5b275f8de812c9db5
+run_name: bustling-duck-255
+run_uuid: 9906e330202943e5b275f8de812c9db5
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747668803803
+status: 4
+tags: []
+user_id: humphry

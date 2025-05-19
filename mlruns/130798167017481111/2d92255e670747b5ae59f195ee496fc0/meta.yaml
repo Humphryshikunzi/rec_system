@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/2d92255e670747b5ae59f195ee496fc0/artifacts
+end_time: 1747668147131
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 2d92255e670747b5ae59f195ee496fc0
+run_name: abundant-calf-889
+run_uuid: 2d92255e670747b5ae59f195ee496fc0
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747668141561
+status: 4
+tags: []
+user_id: humphry

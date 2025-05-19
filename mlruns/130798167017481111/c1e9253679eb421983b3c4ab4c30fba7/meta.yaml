@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/c1e9253679eb421983b3c4ab4c30fba7/artifacts
+end_time: 1747673716661
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: c1e9253679eb421983b3c4ab4c30fba7
+run_name: secretive-toad-911
+run_uuid: c1e9253679eb421983b3c4ab4c30fba7
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747673674412
+status: 3
+tags: []
+user_id: humphry

@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/c1f437e252d7430eb2e592bf88782278/artifacts
+end_time: 1747670176344
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: c1f437e252d7430eb2e592bf88782278
+run_name: brawny-zebra-282
+run_uuid: c1f437e252d7430eb2e592bf88782278
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747670159784
+status: 4
+tags: []
+user_id: humphry

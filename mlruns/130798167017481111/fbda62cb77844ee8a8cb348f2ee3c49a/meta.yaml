@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/fbda62cb77844ee8a8cb348f2ee3c49a/artifacts
+end_time: 1747672016412
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: fbda62cb77844ee8a8cb348f2ee3c49a
+run_name: treasured-hawk-182
+run_uuid: fbda62cb77844ee8a8cb348f2ee3c49a
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747671977255
+status: 4
+tags: []
+user_id: humphry

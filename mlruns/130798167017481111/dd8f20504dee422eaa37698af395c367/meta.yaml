@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/dd8f20504dee422eaa37698af395c367/artifacts
+end_time: 1747669053688
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: dd8f20504dee422eaa37698af395c367
+run_name: blushing-horse-802
+run_uuid: dd8f20504dee422eaa37698af395c367
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747669032446
+status: 4
+tags: []
+user_id: humphry

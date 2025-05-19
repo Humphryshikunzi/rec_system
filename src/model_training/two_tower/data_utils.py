@@ -10,7 +10,8 @@ def get_all_ids_from_interactions(interactions_file_path):
     if not os.path.exists(interactions_file_path):
         raise FileNotFoundError(f"Interactions file not found: {interactions_file_path}")
     interactions_df = pd.read_csv(interactions_file_path)
-    user_ids = interactions_df['uid'].unique().tolist()
+    print(f"DEBUG: Columns in interactions_df: {interactions_df.columns.tolist()}")
+    user_ids = interactions_df['user_id'].unique().tolist()
     post_ids = interactions_df['post_id'].unique().tolist()
     return user_ids, post_ids, interactions_df
 
@@ -23,40 +24,41 @@ def get_positive_and_negative_pairs(interactions_df, all_post_ids_list):
     positive_interactions = ['like', 'bookmark', 'view_full']
     
     # Positive pairs
-    positive_pairs_df = interactions_df[interactions_df['interaction_type'].isin(positive_interactions)][['uid', 'post_id']].drop_duplicates()
+    positive_pairs_df = interactions_df[interactions_df['interaction_type'].isin(positive_interactions)][['user_id', 'post_id']].drop_duplicates()
+    positive_pairs_df.rename(columns={'user_id': 'uid'}, inplace=True) # Rename to 'uid'
+    print(f"DEBUG: Columns in positive_pairs_df after rename: {positive_pairs_df.columns.tolist()}")
+    print(f"DEBUG: positive_pairs_df head:\n{positive_pairs_df.head()}")
     positive_pairs_df['label'] = 1
 
     # Negative pairs
-    # Create a set of all possible (user, post) pairs
-    all_users = interactions_df['uid'].unique()
+    all_users = interactions_df['user_id'].unique() # From original interactions_df
     
-    # Create a multi-index of all (user, post) positive interactions
+    # positive_pairs_df now uses 'uid'
     positive_interaction_tuples = set(tuple(x) for x in positive_pairs_df[['uid', 'post_id']].values)
 
     negative_pairs_list = []
-    num_negative_samples_per_user = 5 # Configurable: number of negative samples per positive interaction or per user
+    num_negative_samples_per_user = 5
 
-    for user_id in all_users:
+    for user_id in all_users: # user_id here is the value from all_users
+        # Filter positive_pairs_df (which uses 'uid') using the current user_id
         user_positive_posts = set(positive_pairs_df[positive_pairs_df['uid'] == user_id]['post_id'])
         
-        # Posts the user has not interacted with positively
         potential_negatives = [pid for pid in all_post_ids_list if pid not in user_positive_posts]
         
-        # Sample negatives
-        # Ensure we don't sample more than available, and provide some diversity
         num_to_sample = min(len(potential_negatives), num_negative_samples_per_user * len(user_positive_posts))
-        if num_to_sample == 0 and len(user_positive_posts) > 0: # User interacted with all posts? Unlikely but handle.
-             # Or if user has no positive interactions, sample some random posts for them
-             num_to_sample = min(len(all_post_ids_list), num_negative_samples_per_user * 1) # Sample a few
+        if num_to_sample == 0 and len(user_positive_posts) > 0:
+             num_to_sample = min(len(all_post_ids_list), num_negative_samples_per_user * 1)
              potential_negatives = all_post_ids_list
-
 
         if len(potential_negatives) > 0:
             sampled_negatives = np.random.choice(potential_negatives, size=num_to_sample, replace=False)
             for neg_post_id in sampled_negatives:
+                # Store with 'uid' for consistency
                 negative_pairs_list.append({'uid': user_id, 'post_id': neg_post_id, 'label': 0})
 
     negative_pairs_df = pd.DataFrame(negative_pairs_list)
+    print(f"DEBUG: Columns in negative_pairs_df: {negative_pairs_df.columns.tolist()}")
+    print(f"DEBUG: negative_pairs_df head:\n{negative_pairs_df.head()}")
     
     training_df = pd.concat([positive_pairs_df, negative_pairs_df], ignore_index=True)
     training_df = training_df.sample(frac=1).reset_index(drop=True) # Shuffle
@@ -75,11 +77,11 @@ def fetch_features_for_training(store: FeatureStore, training_df: pd.DataFrame, 
     
     # Create unique user and post dataframes for feature fetching
     unique_user_df = training_df[['uid']].drop_duplicates().reset_index(drop=True)
-    unique_user_df['event_timestamp'] = pd.to_datetime(datetime.utcnow() - timedelta(seconds=1)) # Ensure timestamp is in the past
+    unique_user_df['event_timestamp'] = pd.to_datetime(datetime.now()) # Use current time
     unique_user_df.rename(columns={'uid': 'user_id'}, inplace=True) # Match entity name if different
 
     unique_post_df = training_df[['post_id']].drop_duplicates().reset_index(drop=True)
-    unique_post_df['event_timestamp'] = pd.to_datetime(datetime.utcnow() - timedelta(seconds=1))
+    unique_post_df['event_timestamp'] = pd.to_datetime(datetime.now()) # Use current time
     # unique_post_df.rename(columns={'post_id': 'post_id'}, inplace=True) # Match entity name if different
 
     print(f"Fetching user features for {len(unique_user_df)} users.")
@@ -153,6 +155,9 @@ def fetch_features_for_training(store: FeatureStore, training_df: pd.DataFrame, 
                 # If it's a single column with array objects, the above 'object' check should handle it.
                 pass # Assuming numerical arrays are handled by Feast or are dense.
 
+        if 'description_embedding' in training_data_with_features.columns and not training_data_with_features.empty:
+            print(f"DEBUG data_utils: After embedding NaN handling, for 'description_embedding': type {training_data_with_features['description_embedding'].dtype}, example value: {training_data_with_features['description_embedding'].iloc[0] if not training_data_with_features.empty and len(training_data_with_features['description_embedding'].iloc[0]) > 0 else 'N/A or empty list'}")
+
 
     # For categorical ID features that need to be integers for Embedding layers:
     # e.g., 'category_id', 'media_type', 'creator_id'
@@ -163,11 +168,36 @@ def fetch_features_for_training(store: FeatureStore, training_df: pd.DataFrame, 
     categorical_id_cols = ['category_id', 'media_type', 'creator_id'] # Add others as needed
     for col in categorical_id_cols:
         if col in training_data_with_features.columns:
-            training_data_with_features[col] = training_data_with_features[col].fillna(0).astype(int) # 0 for unknown/missing
+            # Ensure column is string type first to handle mixed types or numeric strings
+            training_data_with_features[col] = training_data_with_features[col].astype(str)
+
+            # Get unique string categories. Sort for consistent mapping if desired, though not strictly necessary for functionality.
+            # NaNs will be handled by fillna(0) at the end.
+            unique_categories = sorted(list(training_data_with_features[col].dropna().unique()))
+            
+            # Create mapping: string category -> integer index (start from 1)
+            # 0 will be reserved for NaNs or unseen categories.
+            mapping = {category_str: i for i, category_str in enumerate(unique_categories, start=1)}
+            
+            # Apply mapping.
+            # Original NaNs (now strings like 'nan') or strings not in mapping will become NaN after .map().
+            training_data_with_features[col] = training_data_with_features[col].map(mapping)
+            
+            # Fill these NaNs (from original NaNs or unmapped values) with 0.
+            # Then, convert the entire column to int. All values should now be integers.
+            training_data_with_features[col] = training_data_with_features[col].fillna(0).astype(int)
+        
+        for cat_col_debug in categorical_id_cols: # Renamed loop variable for clarity
+            if cat_col_debug in training_data_with_features.columns and not training_data_with_features.empty:
+                print(f"DEBUG data_utils: After categorical processing, for '{cat_col_debug}': type {training_data_with_features[cat_col_debug].dtype}, example value: {training_data_with_features[cat_col_debug].iloc[0]}")
+            elif cat_col_debug in training_data_with_features.columns and training_data_with_features.empty:
+                 print(f"DEBUG data_utils: After categorical processing, for '{cat_col_debug}': DataFrame is empty.")
+
 
     # Ensure user_id and post_id are present and correctly typed
-    training_data_with_features['uid'] = training_data_with_features['uid'].astype(int)
-    training_data_with_features['post_id'] = training_data_with_features['post_id'].astype(int)
+    # Ensure user_id and post_id are present (string IDs are fine here, model handles lookup)
+    # training_data_with_features['uid'] = training_data_with_features['uid'].astype(int) # Removed: Model expects string IDs for lookup
+    # training_data_with_features['post_id'] = training_data_with_features['post_id'].astype(int) # Removed: Model expects string IDs for lookup
 
 
     print(f"Training data with features shape: {training_data_with_features.shape}")
@@ -333,6 +363,15 @@ def create_tf_dataset(df: pd.DataFrame, user_feature_names: list, post_feature_n
     
     # Add label if needed for some custom loss, but TFRS Retrieval task handles it.
     # flat_features_dict['label'] = df['label'].values # Only if not using TFRS task or similar
+
+    if 'description_embedding' in flat_features_dict:
+        desc_emb_val = flat_features_dict['description_embedding']
+        print(f"DEBUG data_utils: In create_tf_dataset, for 'description_embedding': type {type(desc_emb_val)}, shape {desc_emb_val.shape if hasattr(desc_emb_val, 'shape') else 'N/A'}, example value length: {len(desc_emb_val[0]) if hasattr(desc_emb_val, '__len__') and len(desc_emb_val) > 0 and hasattr(desc_emb_val[0], '__len__') else 'N/A or not list/array'}")
+    
+    for cat_col_tf_debug in ['category_id', 'media_type', 'creator_id']: # Renamed loop variable
+        if cat_col_tf_debug in flat_features_dict:
+            cat_val = flat_features_dict[cat_col_tf_debug]
+            print(f"DEBUG data_utils: In create_tf_dataset, for '{cat_col_tf_debug}': type {type(cat_val)}, dtype of elements {cat_val.dtype if hasattr(cat_val, 'dtype') else 'N/A'}, example value: {cat_val[0] if hasattr(cat_val, '__len__') and len(cat_val) > 0 else 'N/A'}")
 
     dataset = tf.data.Dataset.from_tensor_slices(flat_features_dict)
     dataset = dataset.shuffle(buffer_size=len(df), reshuffle_each_iteration=True)

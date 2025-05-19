@@ -51,7 +51,7 @@ interactions_source = FileSource(
 # Source for users with embeddings
 users_with_embeddings_source = FileSource(
     name="users_with_embeddings_source",
-    path="../../artifacts/data/train/users_with_embeddings.parquet",
+    path="/home/humphry/Desktop/qewrix/recsys_prod/artifacts/data/train/users_with_embeddings.parquet",
     timestamp_field="creation_timestamp", # Assuming original timestamp is preserved
     description="User features with text embeddings",
     # field_mapping will be inferred from Parquet, or specify if needed
@@ -68,7 +68,7 @@ users_with_embeddings_source = FileSource(
 # Source for posts with embeddings
 posts_with_embeddings_source = FileSource(
     name="posts_with_embeddings_source",
-    path="../../artifacts/data/train/posts_with_embeddings.parquet",
+    path="/home/humphry/Desktop/qewrix/recsys_prod/artifacts/data/train/posts_with_embeddings.parquet",
     timestamp_field="creation_timestamp", # Assuming original timestamp is preserved
     description="Post features with text embeddings",
     # Ensure no 'schema' parameter is present here
@@ -77,7 +77,7 @@ posts_with_embeddings_source = FileSource(
 # Source for user aggregated features
 user_aggregated_features_source = FileSource(
     name="user_aggregated_features_source",
-    path="../../artifacts/data/train/user_aggregated_features.parquet",
+    path="/home/humphry/Desktop/qewrix/recsys_prod/artifacts/data/train/user_aggregated_features.parquet",
     timestamp_field="event_timestamp", # As defined in the generation script
     description="Aggregated features for users",
     # field_mapping inferred from Parquet
@@ -86,7 +86,7 @@ user_aggregated_features_source = FileSource(
 # Source for post aggregated and derived features
 post_aggregated_derived_features_source = FileSource(
     name="post_aggregated_derived_features_source",
-    path="../../artifacts/data/train/post_aggregated_derived_features.parquet",
+    path="/home/humphry/Desktop/qewrix/recsys_prod/artifacts/data/train/post_aggregated_derived_features.parquet",
     timestamp_field="event_timestamp", # As defined in the generation script
     description="Aggregated and derived features for posts",
     # field_mapping inferred from Parquet

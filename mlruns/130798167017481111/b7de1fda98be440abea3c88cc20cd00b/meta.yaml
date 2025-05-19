@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/b7de1fda98be440abea3c88cc20cd00b/artifacts
+end_time: 1747668078060
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: b7de1fda98be440abea3c88cc20cd00b
+run_name: big-trout-902
+run_uuid: b7de1fda98be440abea3c88cc20cd00b
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747668076906
+status: 4
+tags: []
+user_id: humphry

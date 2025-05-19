@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/0e113b59cb064d169e70890f3c7da14b/artifacts
+end_time: 1747666074618
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 0e113b59cb064d169e70890f3c7da14b
+run_name: rumbling-newt-517
+run_uuid: 0e113b59cb064d169e70890f3c7da14b
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747666073815
+status: 4
+tags: []
+user_id: humphry

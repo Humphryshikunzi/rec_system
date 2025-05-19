@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/3c6c971baeda4c3ab5c5d3c89323dd3f/artifacts
+end_time: 1747671587567
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 3c6c971baeda4c3ab5c5d3c89323dd3f
+run_name: amazing-tern-1
+run_uuid: 3c6c971baeda4c3ab5c5d3c89323dd3f
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747671567443
+status: 4
+tags: []
+user_id: humphry

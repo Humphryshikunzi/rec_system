@@ -1,0 +1,14 @@
+aliases: []
+creation_timestamp: 1747673710760
+current_stage: None
+description: null
+last_updated_timestamp: 1747673710760
+name: TwoTowerRecommender-UserTower
+run_id: c1e9253679eb421983b3c4ab4c30fba7
+run_link: null
+source: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/c1e9253679eb421983b3c4ab4c30fba7/artifacts/user_tower
+status: READY
+status_message: null
+storage_location: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/c1e9253679eb421983b3c4ab4c30fba7/artifacts/user_tower
+user_id: null
+version: 1

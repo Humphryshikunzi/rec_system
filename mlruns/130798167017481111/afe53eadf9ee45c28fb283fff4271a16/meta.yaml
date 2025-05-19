@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/afe53eadf9ee45c28fb283fff4271a16/artifacts
+end_time: 1747672682398
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: afe53eadf9ee45c28fb283fff4271a16
+run_name: efficient-cow-780
+run_uuid: afe53eadf9ee45c28fb283fff4271a16
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747672640598
+status: 4
+tags: []
+user_id: humphry

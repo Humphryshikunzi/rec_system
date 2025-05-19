@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/85f6b97779f44e869ffae6c97ec2d667/artifacts
+end_time: 1747673248589
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 85f6b97779f44e869ffae6c97ec2d667
+run_name: illustrious-swan-780
+run_uuid: 85f6b97779f44e869ffae6c97ec2d667
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747673065508
+status: 4
+tags: []
+user_id: humphry

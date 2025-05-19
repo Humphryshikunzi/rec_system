@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/241d0f63e0854b6c9eafa599c93f600b/artifacts
+end_time: 1747668562185
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 241d0f63e0854b6c9eafa599c93f600b
+run_name: crawling-koi-56
+run_uuid: 241d0f63e0854b6c9eafa599c93f600b
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747668554344
+status: 4
+tags: []
+user_id: humphry

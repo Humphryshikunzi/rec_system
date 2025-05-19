@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/e6f5da91debc4aa190c63761b8a4a348/artifacts
+end_time: 1747669896897
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: e6f5da91debc4aa190c63761b8a4a348
+run_name: popular-steed-180
+run_uuid: e6f5da91debc4aa190c63761b8a4a348
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747669872450
+status: 4
+tags: []
+user_id: humphry

@@ -3,25 +3,30 @@ from tensorflow.keras.layers import Embedding, Dense, Concatenate, Input
 from tensorflow.keras.models import Model
 
 class UserTower(Model):
-    def __init__(self, user_id_vocab_size, embedding_dim, name="user_tower", **kwargs):
+    def __init__(self, user_id_vocab_list, embedding_dim, name="user_tower", **kwargs): # Changed user_id_vocab_size to user_id_vocab_list
         super().__init__(name=name, **kwargs)
-        self.user_id_embedding = Embedding(input_dim=user_id_vocab_size,
+        
+        self.user_id_string_lookup = tf.keras.layers.StringLookup(
+            vocabulary=user_id_vocab_list, mask_token=None, name="user_id_string_lookup"
+        )
+        self.user_id_embedding = Embedding(input_dim=self.user_id_string_lookup.vocabulary_size(),
                                            output_dim=embedding_dim,
                                            name="user_id_embedding")
         # Assuming onboarding_category_ids_embedding is an embedding layer for category IDs
         # If pre-computed, it will be passed directly to call method
         # For simplicity, let's assume it's handled like user_id or passed as pre-embedded
-        # self.category_embedding = Embedding(...) 
+        # self.category_embedding = Embedding(...)
         self.dense_1 = Dense(128, activation="relu")
         self.dense_2 = Dense(embedding_dim, activation="relu") # Output embedding
 
     def call(self, inputs):
-        user_id = inputs["user_id"]
+        user_id_str = inputs["user_id"] # String tensor
         about_embedding = inputs["about_embedding"] # Expected shape: (batch_size, embedding_size)
         headline_embedding = inputs["headline_embedding"] # Expected shape: (batch_size, embedding_size)
         # onboarding_category_ids_embedding = inputs["onboarding_category_ids_embedding"] # (batch_size, num_categories, cat_embedding_dim) or (batch_size, cat_embedding_dim) if aggregated
 
-        user_id_embedded = self.user_id_embedding(user_id) # (batch_size, embedding_dim)
+        user_id_int = self.user_id_string_lookup(user_id_str)
+        user_id_embedded = self.user_id_embedding(user_id_int) # (batch_size, embedding_dim)
 
         # Concatenate all features
         # Ensure all embeddings are 2D (batch_size, feature_dim) before concatenation
@@ -45,9 +50,18 @@ class UserTower(Model):
         return self.dense_2(x)
 
 class PostTower(Model):
-    def __init__(self, post_id_vocab_size, category_id_vocab_size, media_type_vocab_size, creator_id_vocab_size, embedding_dim, name="post_tower", **kwargs):
+    def __init__(self, post_id_vocab_list, category_id_vocab_size, media_type_vocab_size, creator_id_vocab_size, embedding_dim, name="post_tower", **kwargs): # Changed post_id_vocab_size to post_id_vocab_list
         super().__init__(name=name, **kwargs)
-        self.post_id_embedding = Embedding(input_dim=post_id_vocab_size, output_dim=embedding_dim, name="post_id_embedding")
+        
+        # StringLookup for post_id
+        self.post_id_string_lookup = tf.keras.layers.StringLookup(
+            vocabulary=post_id_vocab_list, mask_token=None, name="post_id_string_lookup"
+        )
+        # Embedding layer now uses the output of StringLookup, so input_dim is size of vocab list + OOV
+        self.post_id_embedding = Embedding(input_dim=self.post_id_string_lookup.vocabulary_size(),
+                                           output_dim=embedding_dim,
+                                           name="post_id_embedding")
+                                           
         self.category_id_embedding = Embedding(input_dim=category_id_vocab_size, output_dim=embedding_dim, name="category_id_embedding")
         self.media_type_embedding = Embedding(input_dim=media_type_vocab_size, output_dim=embedding_dim, name="media_type_embedding")
         self.creator_id_embedding = Embedding(input_dim=creator_id_vocab_size, output_dim=embedding_dim, name="creator_id_embedding")
@@ -56,16 +70,21 @@ class PostTower(Model):
         self.dense_2 = Dense(embedding_dim, activation="relu") # Output embedding
 
     def call(self, inputs):
-        post_id = inputs["post_id"]
+        post_id_str = inputs["post_id"] # String tensor
         description_embedding = inputs["description_embedding"] # (batch_size, embedding_size)
-        category_id = inputs["category_id"] # (batch_size, 1) or (batch_size, num_categories) if multi-hot
-        media_type = inputs["media_type"]   # (batch_size, 1)
-        creator_id = inputs["creator_id"]   # (batch_size, 1)
+        category_id = inputs["category_id"] # (batch_size,)
+        media_type = inputs["media_type"]   # (batch_size,)
+        creator_id = inputs["creator_id"]   # (batch_size,)
 
-        post_id_embedded = self.post_id_embedding(post_id)
-        category_id_embedded = self.category_id_embedding(category_id) # (batch_size, embedding_dim)
-        media_type_embedded = self.media_type_embedding(media_type)   # (batch_size, embedding_dim)
-        creator_id_embedded = self.creator_id_embedding(creator_id)   # (batch_size, embedding_dim)
+        # Convert string post_id to integer indices
+        post_id_int = self.post_id_string_lookup(post_id_str)
+        post_id_embedded = self.post_id_embedding(post_id_int) # (batch_size, embedding_dim)
+
+        # Ensure categorical inputs are correctly shaped for embedding (e.g., (batch_size,))
+        # If they are (batch_size, 1), Embedding layer handles it. If (batch_size,), also fine.
+        category_id_embedded = self.category_id_embedding(category_id)
+        media_type_embedded = self.media_type_embedding(media_type)
+        creator_id_embedded = self.creator_id_embedding(creator_id)
 
         # If category_id, media_type, creator_id are single IDs, their embeddings will be (batch_size, embedding_dim)
         # If they are multi-hot or sequences, they might need pooling/aggregation.

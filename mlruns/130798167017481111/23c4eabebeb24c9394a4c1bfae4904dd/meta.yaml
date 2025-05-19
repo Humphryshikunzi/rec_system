@@ -1,0 +1,15 @@
+artifact_uri: file:///home/humphry/Desktop/qewrix/recsys_prod/mlruns/130798167017481111/23c4eabebeb24c9394a4c1bfae4904dd/artifacts
+end_time: 1747670097190
+entry_point_name: ''
+experiment_id: '130798167017481111'
+lifecycle_stage: active
+run_id: 23c4eabebeb24c9394a4c1bfae4904dd
+run_name: upbeat-owl-408
+run_uuid: 23c4eabebeb24c9394a4c1bfae4904dd
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1747670074952
+status: 4
+tags: []
+user_id: humphry
