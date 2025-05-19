@@ -71,7 +71,7 @@ posts_with_embeddings_source = FileSource(
     path="../../artifacts/data/train/posts_with_embeddings.parquet",
     timestamp_field="creation_timestamp", # Assuming original timestamp is preserved
     description="Post features with text embeddings",
-    # field_mapping inferred from Parquet
+    # Ensure no 'schema' parameter is present here
 )
 
 # Source for user aggregated features

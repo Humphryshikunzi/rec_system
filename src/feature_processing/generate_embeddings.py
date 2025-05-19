@@ -25,6 +25,24 @@ def generate_embeddings():
         users_df = pd.read_csv(USER_DATA_FILE)
         posts_df = pd.read_csv(POST_DATA_FILE)
         logging.info("Data loaded successfully.")
+        # Ensure 'creation_timestamp' in users_df is in datetime format
+        if 'creation_timestamp' in users_df.columns:
+            try:
+                users_df['creation_timestamp'] = pd.to_datetime(users_df['creation_timestamp'])
+                logging.info("Successfully converted 'creation_timestamp' in users_df to datetime.")
+            except Exception as e:
+                logging.error(f"Error converting 'creation_timestamp' in users_df to datetime: {e}. Please check the format in the source CSV.")
+        else:
+            logging.warning("'creation_timestamp' column not found in users_df. Skipping datetime conversion for it.")
+# Ensure 'creation_timestamp' in posts_df is in datetime format
+        if 'creation_timestamp' in posts_df.columns:
+            try:
+                posts_df['creation_timestamp'] = pd.to_datetime(posts_df['creation_timestamp'])
+                logging.info("Successfully converted 'creation_timestamp' in posts_df to datetime.")
+            except Exception as e:
+                logging.error(f"Error converting 'creation_timestamp' to datetime: {e}. Please check the format in the source CSV.")
+        else:
+            logging.warning("'creation_timestamp' column not found in posts_df. Skipping datetime conversion for it.")
 
         # Initialize sentence transformer model
         logging.info(f"Initializing sentence transformer model: {EMBEDDING_MODEL}")
