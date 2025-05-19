@@ -1,0 +1,13 @@
+embedding_dim: 64
+learning_rate: 0.001
+batch_size: 512
+epochs: 10
+feast_repo_path: "src/feature_repo" # Relative to project root
+mlflow_experiment_name: "TwoTowerRecommender"
+user_tower_features:
+  - "user_features_view:about_embedding"
+  - "user_features_view:headline_embedding"
+  # ... other features
+post_tower_features:
+  - "post_features_view:description_embedding"
+  # ... other features

@@ -1,0 +1,8 @@
+feast_repo_path: "src/feature_repo"
+category_diversity_factor: 0.3 # Example: aim for no more than 30% from one category in a small window
+new_post_boost_hours: 48
+new_post_boost_factor: 1.2
+default_num_final_recommendations: 20
+post_metadata_features: # Features needed from Feast for re-ranking
+  - "post_features_view:category_id"
+  - "post_features_view:post_creation_timestamp" # Ensure this is the original creation timestamp

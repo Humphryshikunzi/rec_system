@@ -1,0 +1,7 @@
+mlflow_post_tower_uri: "models:/TwoTowerPostTower/Production" # Example MLflow URI
+milvus_host: "localhost"
+milvus_port: "19530"
+milvus_collection_name: "recsys_poc_posts"
+embedding_dim: 64 # Should match Post Tower output
+batch_size: 256
+post_data_path: "artifacts/data/train/posts_with_embeddings.parquet" # Or fetch from Feast

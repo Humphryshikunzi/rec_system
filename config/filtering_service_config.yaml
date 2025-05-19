@@ -1,0 +1,21 @@
+scylla_contact_points: ["127.0.0.1"] # List of contact points
+scylla_port: 9042 # Default ScyllaDB port
+scylla_keyspace: "recsys_poc_interactions"
+# For testing, define some sample data to ensure the filter works
+sample_test_data:
+  - user_id: "user_filter_test_1"
+    post_id: "post_101"
+    interaction_type: "seen"
+    interaction_timestamp: "now()" # Using 'now()' for cqlsh, will be handled in script
+  - user_id: "user_filter_test_1"
+    post_id: "post_102"
+    interaction_type: "disliked"
+    interaction_timestamp: "now()"
+  - user_id: "user_filter_test_1" # Same user, different post
+    post_id: "post_103"
+    interaction_type: "seen"
+    interaction_timestamp: "now()"
+  - user_id: "user_filter_test_2" # Different user
+    post_id: "post_201"
+    interaction_type: "reported"
+    interaction_timestamp: "now()"

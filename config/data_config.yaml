@@ -1,0 +1,12 @@
+num_users: 1000
+num_posts: 10000
+num_categories: 15
+avg_interactions_per_user: 50
+start_date: "2024-01-01"
+end_date: "2024-12-31"
+random_seed: 42
+output_dir: "artifacts/data"
+split_ratios: # train, validation, test
+  train: 0.7
+  validation: 0.15
+  test: 0.15
