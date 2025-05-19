@@ -33,7 +33,7 @@ def load_interaction_data(file_path, positive_interaction_types):
 
         df['label'] = df['interaction_type'].isin(positive_interaction_types).astype(int)
         # Keep only positive interactions for initial seed
-        positive_df = df[df['label'] == 1][['user_id', 'post_id', 'event_timestamp']].copy()
+        positive_df = df[df['label'] == 1][['user_id', 'post_id', 'timestamp', 'label']].copy()
         logger.info(f"Loaded {len(df)} interactions, {len(positive_df)} positive interactions identified.")
         return positive_df, df
     except FileNotFoundError:
@@ -75,11 +75,11 @@ def generate_negative_samples(positive_df, all_interactions_df, all_posts_df, ra
         # This is a simplification; ideally, impression events would have their own timestamps.
         # If positive_df is empty for a user (should not happen if we iterate user_positive_interactions),
         # or if timestamps are missing, use a default.
-        user_timestamps = positive_df[positive_df['user_id'] == user_id]['event_timestamp']
+        user_timestamps = positive_df[positive_df['user_id'] == user_id]['timestamp']
         event_ts = user_timestamps.max() if not user_timestamps.empty else datetime.utcnow()
 
         for post_id in sampled_negatives:
-            negative_samples.append({'user_id': user_id, 'post_id': post_id, 'label': 0, 'event_timestamp': event_ts})
+            negative_samples.append({'user_id': user_id, 'post_id': post_id, 'label': 0, 'timestamp': event_ts})
             
     negative_df = pd.DataFrame(negative_samples)
     logger.info(f"Generated {len(negative_df)} negative samples.")
@@ -90,17 +90,19 @@ def get_feature_data(store: FeatureStore, entity_df: pd.DataFrame, features: lis
     logger.info(f"Fetching features from Feast: {features}")
     try:
         # Ensure 'event_timestamp' is present and in the correct format
-        if 'event_timestamp' not in entity_df.columns:
-            logger.warning("event_timestamp column not found in entity_df. Adding current UTC time.")
-            entity_df['event_timestamp'] = datetime.utcnow()
-        elif not pd.api.types.is_datetime64_any_dtype(entity_df['event_timestamp']):
-            entity_df['event_timestamp'] = pd.to_datetime(entity_df['event_timestamp'])
+        if 'timestamp' not in entity_df.columns:
+            logger.warning("timestamp column not found in entity_df. Adding current UTC time.")
+            # This case should ideally not be hit if the calling code prepares entity_df correctly.
+            # If it's hit, it means the input DataFrame didn't have 'timestamp' as expected.
+            entity_df['timestamp'] = datetime.utcnow()
+        elif not pd.api.types.is_datetime64_any_dtype(entity_df['timestamp']):
+            entity_df['timestamp'] = pd.to_datetime(entity_df['timestamp'])
 
         # Ensure timestamps are timezone-aware (UTC) as Feast expects
-        if entity_df['event_timestamp'].dt.tz is None:
-            entity_df['event_timestamp'] = entity_df['event_timestamp'].dt.tz_localize('UTC')
+        if entity_df['timestamp'].dt.tz is None:
+            entity_df['timestamp'] = entity_df['timestamp'].dt.tz_localize('UTC')
         else:
-            entity_df['event_timestamp'] = entity_df['event_timestamp'].dt.tz_convert('UTC')
+            entity_df['timestamp'] = entity_df['timestamp'].dt.tz_convert('UTC')
 
 
         # Check for required entity keys
@@ -441,20 +443,29 @@ def get_training_and_validation_data(config_path: str):
             random_seed=config.get('random_seed', 42)
         )
         train_entity_df = pd.concat([
-            positive_train_df[['user_id', 'post_id', 'event_timestamp', 'label']], 
+            positive_train_df[['user_id', 'post_id', 'timestamp', 'label']],
             negative_train_df
         ], ignore_index=True)
     elif not positive_train_df.empty and all_posts_df.empty:
         logger.warning("No posts data available for negative sampling. Using only positive samples for training.")
-        train_entity_df = positive_train_df[['user_id', 'post_id', 'event_timestamp', 'label']].copy()
+        train_entity_df = positive_train_df[['user_id', 'post_id', 'timestamp', 'label']].copy()
     else: # No positive samples
         logger.warning("No positive training samples found. Training data will be empty.")
-        train_entity_df = pd.DataFrame(columns=['user_id', 'post_id', 'event_timestamp', 'label'])
+        train_entity_df = pd.DataFrame(columns=['user_id', 'post_id', 'timestamp', 'label'])
 
     if not train_entity_df.empty:
-        train_features_df = get_feature_data(store, train_entity_df[['user_id', 'post_id', 'event_timestamp']], config['feature_list'], config)
+        # Ensure 'timestamp' is datetime and UTC for consistency before fetching and merging
+        if not pd.api.types.is_datetime64_any_dtype(train_entity_df['timestamp']):
+            train_entity_df['timestamp'] = pd.to_datetime(train_entity_df['timestamp'])
+        if train_entity_df['timestamp'].dt.tz is None:
+            train_entity_df['timestamp'] = train_entity_df['timestamp'].dt.tz_localize('UTC')
+        else:
+            train_entity_df['timestamp'] = train_entity_df['timestamp'].dt.tz_convert('UTC')
+
+        train_features_df = get_feature_data(store, train_entity_df[['user_id', 'post_id', 'timestamp']], config['feature_list'], config)
         # Merge labels back after fetching features, as Feast drops non-entity/timestamp columns
-        train_full_df = pd.merge(train_features_df, train_entity_df[['user_id', 'post_id', 'event_timestamp', 'label']], on=['user_id', 'post_id', 'event_timestamp'])
+        # Now both DataFrames should have 'timestamp' as datetime64[ns, UTC]
+        train_full_df = pd.merge(train_features_df, train_entity_df[['user_id', 'post_id', 'timestamp', 'label']], on=['user_id', 'post_id', 'timestamp'])
         train_full_df = compute_on_the_fly_features(train_full_df, config)
         X_train, y_train = prepare_data_for_model(train_full_df, config)
     else:
@@ -473,20 +484,29 @@ def get_training_and_validation_data(config_path: str):
             random_seed=config.get('random_seed', 42) # Use same seed for consistency if desired
         )
         val_entity_df = pd.concat([
-            positive_val_df[['user_id', 'post_id', 'event_timestamp', 'label']],
+            positive_val_df[['user_id', 'post_id', 'timestamp', 'label']],
             negative_val_df
         ], ignore_index=True)
     elif not positive_val_df.empty and all_posts_df.empty:
         logger.warning("No posts data available for negative sampling. Using only positive samples for validation.")
-        val_entity_df = positive_val_df[['user_id', 'post_id', 'event_timestamp', 'label']].copy()
+        val_entity_df = positive_val_df[['user_id', 'post_id', 'timestamp', 'label']].copy()
     else: # No positive samples
         logger.warning("No positive validation samples found. Validation data will be empty.")
-        val_entity_df = pd.DataFrame(columns=['user_id', 'post_id', 'event_timestamp', 'label'])
+        val_entity_df = pd.DataFrame(columns=['user_id', 'post_id', 'timestamp', 'label'])
 
 
     if not val_entity_df.empty:
-        val_features_df = get_feature_data(store, val_entity_df[['user_id', 'post_id', 'event_timestamp']], config['feature_list'], config)
-        val_full_df = pd.merge(val_features_df, val_entity_df[['user_id', 'post_id', 'event_timestamp', 'label']], on=['user_id', 'post_id', 'event_timestamp'])
+        # Ensure 'timestamp' is datetime and UTC for consistency before fetching and merging
+        if not pd.api.types.is_datetime64_any_dtype(val_entity_df['timestamp']):
+            val_entity_df['timestamp'] = pd.to_datetime(val_entity_df['timestamp'])
+        if val_entity_df['timestamp'].dt.tz is None:
+            val_entity_df['timestamp'] = val_entity_df['timestamp'].dt.tz_localize('UTC')
+        else:
+            val_entity_df['timestamp'] = val_entity_df['timestamp'].dt.tz_convert('UTC')
+
+        val_features_df = get_feature_data(store, val_entity_df[['user_id', 'post_id', 'timestamp']], config['feature_list'], config)
+        # Now both DataFrames should have 'timestamp' as datetime64[ns, UTC]
+        val_full_df = pd.merge(val_features_df, val_entity_df[['user_id', 'post_id', 'timestamp', 'label']], on=['user_id', 'post_id', 'timestamp'])
         val_full_df = compute_on_the_fly_features(val_full_df, config)
         X_val, y_val = prepare_data_for_model(val_full_df, config)
         

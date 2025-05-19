@@ -9,18 +9,18 @@ n_estimators: 100
 feast_repo_path: "src/feature_repo"
 mlflow_experiment_name: "RankingModel"
 feature_list:
-  - "user_features_view:about_embedding"
-  - "user_features_view:headline_embedding"
-  - "user_features_view:onboarding_category_ids"
-  - "user_features_view:total_likes" # Example aggregated feature
-  - "user_features_view:total_bookmarks" # Example aggregated feature
-  - "post_features_view:description_embedding"
-  - "post_features_view:category_id"
-  - "post_features_view:media_type"
-  - "post_features_view:creator_id"
-  - "post_features_view:post_age_hours"
-  - "post_features_view:likes_count" # Example engagement feature
-  - "post_features_view:bookmarks_count" # Example engagement feature
+  - "user_profile_features:about_embedding"
+  - "user_profile_features:headline_embedding"
+  - "user_profile_features:onboarding_category_ids"
+  - "user_aggregated_stats:count_likes_given"
+  # - "user_aggregated_stats:count_bookmarks_given" # Removed
+  - "post_details_features:description_embedding"
+  - "post_details_features:category_id"
+  - "post_details_features:media_type"
+  - "post_details_features:creator_id"
+  - "post_aggregated_derived_stats:post_age_hours"
+  - "post_aggregated_derived_stats:num_likes_on_post"
+  # - "post_aggregated_derived_stats:num_bookmarks_on_post" # Removed
 # User-Post Interaction features (some might be computed on-the-fly)
 # These are examples and might need adjustment based on actual feature view definitions
 #  - "user_post_interaction_features_view:is_post_category_in_onboarding"
