@@ -1,6 +1,6 @@
 import yaml
 from feast import FeatureStore
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import Counter
 
 class ReRankService:
@@ -56,7 +56,7 @@ class ReRankService:
         Returns the list with potentially updated scores.
         """
         boosted_posts = []
-        now = datetime.utcnow() # Use UTC if timestamps are in UTC
+        now = datetime.now(timezone.utc) # Use UTC if timestamps are in UTC
 
         for post_id, score in scored_posts:
             metadata = post_metadata.get(post_id)

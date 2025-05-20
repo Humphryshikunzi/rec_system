@@ -3,7 +3,7 @@
 feast_repo_path: "src/feature_repo" # Relative path to the feature_store.yaml's parent directory
 
 # MLflow model details for the Ranking Model
-mlflow_ranking_model_uri: "models:/RankingModel/Production" # Example URI, replace with your actual model URI
+mlflow_ranking_model_uri: "mlruns/446405664678046264/ab52ad39d045461f8e2a8ba6da84dde1/artifacts/model" # Example URI, replace with your actual model URI
 ranking_model_type: "xgboost" # Supported types: "xgboost", "lightgbm", "tensorflow". Ensure predictor.py supports it.
 
 # List of all features (view_name:feature_name or just feature_name if computed on-the-fly and model expects that name)
@@ -13,18 +13,15 @@ ranking_model_type: "xgboost" # Supported types: "xgboost", "lightgbm", "tensorf
 # The model must have been trained on features with these exact names and in this order.
 ranking_feature_list:
   # User features
-  - "user_features_view:about_embedding" # Example: Embedding of user's 'about' text
-  - "user_features_view:onboarding_category_ids" # Example: List of category IDs from user onboarding
-  - "user_features_view:avg_posts_per_day" # Example: User's average posts per day
-  - "user_features_view:user_age" # Example
-  - "user_features_view:user_country_code" # Example
+  - "user_profile_features:about_embedding" # Example: Embedding of user's 'about' text
+  - "user_profile_features:onboarding_category_ids" # Example: List of category IDs from user onboarding
+  - "user_aggregated_stats:num_posts_created" # Was avg_posts_per_day
 
   # Post features
-  - "post_features_view:description_embedding" # Example: Embedding of post's description
-  - "post_features_view:category_id" # Example: Category ID of the post
-  - "post_features_view:num_likes_last_7_days" # Example
-  - "post_features_view:post_age_days" # Example
-  - "post_features_view:text_complexity_score" # Example
+  - "post_details_features:description_embedding" # Example: Embedding of post's description
+  - "post_details_features:category_id" # Example: Category ID of the post
+  - "post_aggregated_derived_stats:num_likes_on_post" # Was num_likes_last_7_days
+  - "post_aggregated_derived_stats:post_age_hours" # Was post_age_days
 
   # User-Post Interaction features (can be from Feast if precomputed, or computed on-the-fly)
   # If computed on-the-fly in RankingServiceTransformer._compute_on_the_fly_features,

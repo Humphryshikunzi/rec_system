@@ -62,16 +62,36 @@ class RankingServiceTransformer:
             {
                 self.user_id_col: [user_id] * len(post_ids),
                 self.post_id_col: post_ids,
-                "event_timestamp": [datetime.now()] * len(post_ids),
+                "event_timestamp": [datetime.now()] * len(post_ids), # Revert to tz-naive
             }
         )
+        print(f"DEBUG: entity_df created in _fetch_features (tz-naive):\n{entity_df}")
 
         # Ensure feature_list contains fully qualified feature names (view:feature)
         # If some features are just names, they might need qualification or handling
         # For now, assume feature_list is correctly formatted for Feast
+        
+        # Filter feature_list to only include features to be fetched from Feast (those with ':')
+        feast_feature_list = [f for f in self.feature_list if ":" in f]
+        
+        if not feast_feature_list: # If no features are to be fetched from Feast
+            # Return a DataFrame with just the entity keys, so subsequent processing can add on-the-fly features
+            # or handle cases where only on-the-fly features are needed.
+            # However, the current _compute_on_the_fly_features expects some base columns.
+            # For now, if no feast_feature_list, we might return an empty df or one with minimal entity info.
+            # Let's return an empty df and let preprocess handle it, or adjust if needed.
+            # A more robust solution might involve returning entity_df if no feast features are requested.
+            # For this specific case, if all features were on-the-fly, this path would be taken.
+            # But usually, we fetch some base features.
+            # If feast_feature_list is empty, it implies an issue or a very specific use case.
+            # For now, let's assume it's not empty if we expect to fetch.
+            # If it IS empty and we proceed, get_historical_features might error or return empty.
+            # Let's proceed with the filtered list. If it's empty, Feast will handle it (likely return empty features).
+            pass
+
         historical_features_df = self.store.get_historical_features(
             entity_df=entity_df,
-            features=self.feature_list,
+            features=feast_feature_list, # Use the filtered list
         ).to_df()
 
         return historical_features_df

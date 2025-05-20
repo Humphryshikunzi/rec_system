@@ -1,6 +1,6 @@
 import yaml
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 # Adjust the path to import ReRankService from its location
@@ -36,16 +36,16 @@ def get_mock_post_metadata(post_ids: list) -> dict:
     Provides sample category_id and creation_timestamp for given post_ids.
     """
     mock_data = {}
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for i, pid in enumerate(post_ids):
         # Simulate different categories and creation times
         category = f"cat_{(i % 3) + 1}" # cat_1, cat_2, cat_3
-        if i < 2: # First two posts are "new"
-            creation_time = now - timedelta(hours=(i * 10) + 1) # e.g., 1h ago, 11h ago
-        elif i < 5: # Next three are moderately old
-            creation_time = now - timedelta(days=i) # e.g., 2d ago, 3d ago, 4d ago
+        if i < len(post_ids) // 4 : # ~First quarter are "new"
+            creation_time = now - timedelta(hours=(i * 2) + 1)
+        elif i < len(post_ids) // 2: # ~Second quarter are moderately old
+            creation_time = now - timedelta(days=(i - len(post_ids) // 4) + 1)
         else: # Rest are older
-            creation_time = now - timedelta(days=30 + i)
+            creation_time = now - timedelta(days=30 + (i - len(post_ids) // 2))
         
         mock_data[pid] = {
             "category_id": category,
@@ -83,41 +83,50 @@ def run_test():
         return
 
 
-    # 3. Mock the _get_post_metadata method
-    # This is crucial for local testing without a live Feast setup.
-    re_rank_service._get_post_metadata = MagicMock(side_effect=get_mock_post_metadata)
-    print("ReRankService._get_post_metadata has been mocked.")
-
-    # 4. Simulate a list of scored posts
-    # (post_id, score)
     # Ensure some posts can be identified as "new" and have varying categories.
-    simulated_scored_posts = [
-        ("post_A", 0.95), # New, cat_1
-        ("post_B", 0.92), # New, cat_2
-        ("post_C", 0.90), # Older, cat_3
-        ("post_D", 0.88), # Older, cat_1
-        ("post_E", 0.85), # Older, cat_2
-        ("post_F", 0.82), # Very old, cat_3
-        ("post_G", 0.80), # Very old, cat_1
-        ("post_H", 0.78), # New-ish (mocked as 21h old), cat_2 -> should get boost
-        ("post_I", 0.75), # Older, cat_3
-        ("post_J", 0.72), # Older, cat_1
-        ("post_K", 0.70), # Very old, cat_2
-        ("post_L", 0.68)  # Very old, cat_3
+    # This is now a template, the actual metadata (categories, timestamps) comes from true_mock_metadata
+    simulated_scored_posts_template = [
+        ("post_A", 0.95),
+        ("post_B", 0.92),
+        ("post_C", 0.90),
+        ("post_D", 0.88),
+        ("post_E", 0.85),
+        ("post_F", 0.82),
+        ("post_G", 0.80),
+        ("post_H", 0.78),
+        ("post_I", 0.75),
+        ("post_J", 0.72),
+        ("post_K", 0.70),
+        ("post_L", 0.68)
     ]
     # Add more posts to test diversity and truncation
-    for i in range(10):
-        simulated_scored_posts.append((f"post_M{i}", 0.65 - i*0.01)) # Various categories due to mock
-        simulated_scored_posts.append((f"post_N{i}", 0.64 - i*0.01)) # cat_1 dominant if not careful
-        simulated_scored_posts.append((f"post_O{i}", 0.63 - i*0.01)) # cat_2
+    for i in range(10): # This will create post_M0-M9, N0-N9, O0-O9
+        simulated_scored_posts_template.append((f"post_M{i}", 0.65 - i*0.01))
+        simulated_scored_posts_template.append((f"post_N{i}", 0.64 - i*0.01))
+        simulated_scored_posts_template.append((f"post_O{i}", 0.63 - i*0.01))
 
     # Extract post_ids to pass to the mocked metadata function
     # The mock function will use these to generate diverse metadata
-    all_post_ids_for_mock = [pid for pid, _ in simulated_scored_posts]
+    all_post_ids_for_mock = [pid for pid, _ in simulated_scored_posts_template] # Use template here
     
-    # To make the mock effective, we need to ensure the mock function is called with these IDs.
-    # The ReRankService calls _get_post_metadata internally.
-    # We can pre-populate the mock's expected return value if needed, but side_effect should work.
+    # Generate the "true" mock metadata that the service will use
+    true_mock_metadata = get_mock_post_metadata(all_post_ids_for_mock)
+
+    # 3. Mock the _get_post_metadata method
+    # This is crucial for local testing without a live Feast setup.
+    def mock_side_effect_func(post_ids_input_to_service):
+        # The service will call this with a list of post_ids.
+        # We return the relevant subset from our pre-generated true_mock_metadata.
+        return {pid: true_mock_metadata[pid] for pid in post_ids_input_to_service if pid in true_mock_metadata}
+
+    re_rank_service._get_post_metadata = MagicMock(side_effect=mock_side_effect_func)
+    print("ReRankService._get_post_metadata has been mocked to use pre-generated consistent metadata.")
+
+    # 4. Simulate a list of scored posts (using the template)
+    # (post_id, score)
+    # The actual list of posts passed to the service
+    simulated_scored_posts = simulated_scored_posts_template[:]
+
 
     print(f"\nSimulated scored posts (first 5): {simulated_scored_posts[:5]}")
     print(f"Total simulated posts: {len(simulated_scored_posts)}")
@@ -141,14 +150,13 @@ def run_test():
     print("\n--- Final Re-ranked Recommendations ---")
     if final_recommendations:
         for i, post_id in enumerate(final_recommendations):
-            # Optionally, fetch their mocked metadata again to show category for verification
-            # This is for display; the service itself uses the metadata internally.
-            mock_meta = get_mock_post_metadata([post_id]) # Get fresh mock data for this one post
-            category = mock_meta.get(post_id, {}).get("category_id", "N/A")
-            # Check if it was new (for demonstration)
-            creation_ts = mock_meta.get(post_id, {}).get("creation_timestamp")
+            # Use the true_mock_metadata for display to ensure consistency
+            meta_for_display = true_mock_metadata.get(post_id, {})
+            category = meta_for_display.get("category_id", "N/A")
+            creation_ts = meta_for_display.get("creation_timestamp")
+            
             is_new_str = ""
-            if creation_ts and (datetime.utcnow() - creation_ts) <= timedelta(hours=config.get("new_post_boost_hours", 48)):
+            if creation_ts and (datetime.now(timezone.utc) - creation_ts) <= timedelta(hours=config.get("new_post_boost_hours", 48)):
                  is_new_str = "(Boosted)"
             
             print(f"{i+1}. Post ID: {post_id} (Category: {category}) {is_new_str}")

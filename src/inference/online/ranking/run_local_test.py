@@ -3,18 +3,16 @@ import pandas as pd
 import numpy as np
 import os
 from typing import Dict, List
+import sys
 
-# Adjust import paths if your project structure is different
-# This assumes run_local_test.py is in src/inference/online/ranking/
-# and config is in ../../../config/
-# and other modules are in the same directory (ranking/)
-try:
-    from predictor import RankingModelPredictor
-    from transformer import RankingServiceTransformer
-except ImportError:
-    # Fallback for running directly from project root or other locations
-    from src.inference.online.ranking.predictor import RankingModelPredictor
-    from src.inference.online.ranking.transformer import RankingServiceTransformer
+# Add the project root to sys.path
+project_root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+if project_root_path not in sys.path:
+    sys.path.insert(0, project_root_path)
+
+# Imports should now work with 'src.' prefix
+from src.inference.online.ranking.predictor import RankingModelPredictor
+from src.inference.online.ranking.transformer import RankingServiceTransformer
 
 
 def load_config(config_path: str) -> Dict:
@@ -44,11 +42,39 @@ class MockRankingModelPredictor:
     def predict(self, features_df: pd.DataFrame) -> np.ndarray:
         print(f"MockRankingModelPredictor: Received {len(features_df)} items to score.")
         if features_df.empty:
+            print("MockRankingModelPredictor: Received empty features_df, returning empty scores.")
             return np.array([])
-        # Simulate scores (e.g., random probabilities)
-        scores = np.random.rand(len(features_df))
-        print(f"MockRankingModelPredictor: Generated scores: {scores}")
-        return scores
+
+        print("MockRankingModelPredictor: Input features_df (relevant columns):")
+        if 'is_post_category_in_onboarding' in features_df.columns:
+            print(features_df[['is_post_category_in_onboarding']])
+        else:
+            print("MockRankingModelPredictor: 'is_post_category_in_onboarding' not in features_df.")
+
+        base_scores = np.full(len(features_df), 0.3) # Default lowish score
+
+        if 'is_post_category_in_onboarding' in features_df.columns:
+            base_scores[features_df['is_post_category_in_onboarding'] == 1] = 0.8 # Higher score for match
+
+        # Add some noise
+        noise = np.random.uniform(-0.1, 0.1, len(features_df))
+        final_scores = np.clip(base_scores + noise, 0, 1) # Clip scores to [0, 1]
+
+        print(f"MockRankingModelPredictor: Generated scores: {final_scores}")
+        return final_scores
+
+MOCK_USER_DATA = {
+    "user_test_123": {"onboarding_category_ids": [10, 20, 30]}
+}
+
+MOCK_POST_DATA = {
+    "post_A": {"category_id": 10},  # Category in user's onboarding
+    "post_B": {"category_id": 99},  # Category NOT in user's onboarding
+    "post_C_new": {"category_id": 20}, # Category in user's onboarding
+    "post_D_unseen_cat": {"category_id": 40}, # Category NOT in user's onboarding
+    # post_E_random will get a random category
+}
+EMBEDDING_DIM = 10 # Define embedding dimension
 
 class MockRankingServiceTransformer(RankingServiceTransformer):
     def __init__(self, feast_repo_path: str, ranking_model_predictor: RankingModelPredictor,
@@ -61,37 +87,61 @@ class MockRankingServiceTransformer(RankingServiceTransformer):
         print(f"Mock _fetch_features for user: {user_id}, posts: {post_ids}")
         if not post_ids:
             return pd.DataFrame()
-        
-        # Create a dummy DataFrame with the expected feature columns
-        # self.model_feature_names was extracted in __init__ from feature_list
-        data = {}
-        for feature_name in self.model_feature_names:
-            # Simplistic: generate random data or zeros
-            # Handle specific known features for more realistic mock
-            if "embedding" in feature_name:
-                 # Create a list of lists for embedding-like features
-                data[feature_name] = [np.random.rand(10).tolist() for _ in range(len(post_ids))]
-            elif "onboarding_category_ids" == feature_name:
-                data[feature_name] = [[1,2,3] for _ in range(len(post_ids))] # Example list
-            elif "category_id" == feature_name:
-                 data[feature_name] = [np.random.randint(1,5) for _ in range(len(post_ids))]
-            else:
-                data[feature_name] = np.random.rand(len(post_ids))
-        
-        # Add id columns needed for internal processing if any (e.g. by _compute_on_the_fly_features)
-        # The base class _fetch_features returns these, so mock should too.
-        df = pd.DataFrame(data)
-        df[self.user_id_col] = user_id
-        df[self.post_id_col] = post_ids
-        # df["event_timestamp"] = datetime.now() # Not strictly needed if not used downstream by mock
 
-        print(f"Mock _fetch_features returning DataFrame with columns: {df.columns.tolist()}")
+        data_rows = []
+        user_onboarding_cats = MOCK_USER_DATA.get(user_id, {}).get("onboarding_category_ids", [])
+
+        for post_id_val in post_ids:
+            post_data_point = MOCK_POST_DATA.get(post_id_val, {})
+            row = {
+                self.user_id_col: user_id,
+                self.post_id_col: post_id_val,
+            }
+
+            # Populate features based on self.model_feature_names
+            for feature_name in self.model_feature_names:
+                if feature_name == "onboarding_category_ids": # User feature
+                    row[feature_name] = user_onboarding_cats
+                elif feature_name == "category_id": # Post feature
+                    row[feature_name] = post_data_point.get("category_id", np.random.randint(1, 5)) # Default random if post not in MOCK_POST_DATA
+                elif "embedding" in feature_name:
+                    row[feature_name] = np.random.rand(EMBEDDING_DIM).tolist()
+                elif feature_name == "num_posts_created": # User feature
+                    row[feature_name] = np.random.randint(0, 100) # Example user-level feature
+                elif feature_name == "num_likes_on_post": # Post feature
+                    row[feature_name] = np.random.randint(0, 500)
+                elif feature_name == "post_age_hours": # Post feature
+                    row[feature_name] = np.random.uniform(1, 720)
+                elif feature_name == "is_post_category_in_onboarding":
+                    # This feature is computed on-the-fly, so it shouldn't be generated here.
+                    # It will be added by the base class's preprocess method.
+                    # If it's in model_feature_names, it means the model expects it.
+                    pass # Do not generate, it's an output of _compute_on_the_fly_features
+                else:
+                    # Default for other features not explicitly handled
+                    row[feature_name] = np.random.rand()
+            data_rows.append(row)
+
+        df = pd.DataFrame(data_rows)
+        
+        # Ensure all model_feature_names are columns, even if not explicitly set above (e.g. if new ones added to config)
+        # This is important because _compute_on_the_fly_features might need some of them.
+        # And the final selection in preprocess() expects all model_feature_names.
+        for feature_name in self.model_feature_names:
+            if feature_name not in df.columns:
+                # This case should ideally be handled by the loop above.
+                # If 'is_post_category_in_onboarding' is here, it's fine, it will be computed.
+                if feature_name != "is_post_category_in_onboarding":
+                    print(f"Warning: Mock _fetch_features: model feature '{feature_name}' was not explicitly generated. Adding with NaNs or default.")
+                    # Add with NaNs or a default. For simplicity, let's use random for now if it's not an on-the-fly one.
+                    df[feature_name] = np.random.rand(len(df))
+
+
+        print(f"Mock _fetch_features generated DataFrame with columns: {df.columns.tolist()}")
+        if not df.empty:
+             print("Sample of generated data by _fetch_features (first 5 rows):")
+             print(df[[self.post_id_col, "category_id", "onboarding_category_ids"]].head())
         return df
-    
-    # _compute_on_the_fly_features will be called from the parent class's preprocess method.
-    # If it relies on specific data from _fetch_features, ensure the mock provides it.
-    # The current _compute_on_the_fly_features for 'is_post_category_in_onboarding'
-    # should work if 'onboarding_category_ids' and 'category_id' are in the mock df.
 
 def run_test():
     """
@@ -100,8 +150,8 @@ def run_test():
     # Determine the correct path to the config file
     # This assumes the script is in src/inference/online/ranking/
     # So config is ../../../config/
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, "..", "..", "..", "config", "ranking_service_config.yaml")
+    # project_root_path is defined globally at the top of the script
+    config_path = os.path.join(project_root_path, "config", "ranking_service_config.yaml")
     
     print(f"Loading configuration from: {config_path}")
     config = load_config(config_path)
@@ -110,9 +160,8 @@ def run_test():
     # Convert relative feast_repo_path from config (relative to project root)
     # to an absolute path or path relative to this script's execution context if needed.
     # For Feast, it's often best to use a path relative to the project root.
-    # Assuming the script is run from project root or Feast can handle the relative path:
-    project_root = os.path.join(script_dir, "..", "..", "..")
-    feast_repo_full_path = os.path.join(project_root, feast_repo_path_relative)
+    # Use the globally defined project_root_path
+    feast_repo_full_path = os.path.join(project_root_path, feast_repo_path_relative)
     print(f"Feast repository path (resolved): {feast_repo_full_path}")
 
 
@@ -169,7 +218,7 @@ def run_test():
 
     simulated_request = {
         user_id_key: "user_test_123",
-        post_id_key: ["post_A", "post_B", "post_C_new"] # Mix of potentially known/unknown posts
+        post_id_key: ["post_A", "post_B", "post_C_new", "post_D_unseen_cat", "post_E_random"]
     }
     print(f"Request data: {simulated_request}")
 
