@@ -394,6 +394,11 @@ A local test script `src/inference/online/candidate_generation/run_local_test.py
 
 1.  **Ensure Prerequisites:**
     *   A running MLflow server with the specified User Tower model registered (e.g., `models:/TwoTowerUserTower/Production`).
+*   To start a local MLflow server, navigate to your project root directory in the terminal and run:
+            ```bash
+            mlflow ui --backend-store-uri ./mlruns --default-artifact-root ./mlruns -p 5000
+            ```
+            This will typically make the MLflow UI accessible at `http://localhost:5000`. Ensure your `MLFLOW_TRACKING_URI` environment variable is set (e.g., to `http://localhost:5000`) if you are running MLflow on a different host or port, or if your scripts need to explicitly know where the server is.
     *   A running Feast instance with materialized user features.
     *   A running Milvus instance with an indexed collection of post embeddings (e.g., `recsys_poc_posts`, populated by the offline indexing script).
     *   The configuration file `config/candidate_generation_service_config.yaml` is correctly set up.
@@ -401,7 +406,7 @@ A local test script `src/inference/online/candidate_generation/run_local_test.py
 2.  **Execute the script:**
     From the project root directory:
     ```bash
-    python src/inference/online/candidate_generation/run_local_test.py --config config/candidate_generation_service_config.yaml --user_id "some_user_id" --categories 1 2 --top_n 50
+    python src/inference/online/candidate_generation/run_local_test.py --config config/candidate_generation_service_config.yaml --user_id "u_0000" --categories 0 5 --top_n 10
     ```
     *   `--config`: Path to the service configuration YAML file. Defaults to `config/candidate_generation_service_config.yaml` relative to the project root.
     *   `--user_id`: The ID of the user for whom to generate candidates.

@@ -12,6 +12,11 @@ SRC_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "../../../")) # Adjust based 
 if SRC_DIR not in sys.path:
     sys.path.append(SRC_DIR)
 
+# Add the directory containing the 'model.py' for UserTower/PostTower to allow MLflow to find it
+MODEL_TRAINING_DIR = os.path.abspath(os.path.join(SRC_DIR, "model_training", "two_tower"))
+if MODEL_TRAINING_DIR not in sys.path:
+    sys.path.insert(0, MODEL_TRAINING_DIR) # Insert at the beginning
+
 try:
     from inference.online.candidate_generation.predictor import UserTowerPredictor
     from inference.online.candidate_generation.transformer import CandidateGenerationTransformer
@@ -45,7 +50,8 @@ def main(config_path: str, user_id: str, preferred_categories: list[int], top_n:
     config = load_config(config_path)
 
     # --- Configuration Values ---
-    feast_repo_path = os.path.join(SRC_DIR, config["feast_repo_path"]) # Make path absolute from project root
+    PROJECT_ROOT_DIR = os.path.abspath(os.path.join(SRC_DIR, ".."))
+    feast_repo_path = os.path.join(PROJECT_ROOT_DIR, config["feast_repo_path"]) # Path relative to project root
     mlflow_model_uri = config["mlflow_user_tower_uri"]
     milvus_host = config["milvus_host"]
     milvus_port = config["milvus_port"]

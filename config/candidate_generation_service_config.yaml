@@ -1,5 +1,5 @@
 feast_repo_path: "src/feature_repo"
-mlflow_user_tower_uri: "models:/TwoTowerUserTower/Production" # Example MLflow URI for the User Tower model
+mlflow_user_tower_uri: "models:/TwoTowerRecommender-UserTower/3" # Using Version 3 of User Tower model
 milvus_host: "localhost"
 milvus_port: "19530"
 milvus_collection_name: "recsys_poc_posts" # Name of the Milvus collection containing post embeddings
@@ -7,8 +7,8 @@ user_features_for_tower: # List of features needed by the User Tower model
   # Format: "feature_view_name:feature_name"
   # These should match the feature names and views defined in your Feast feature repository
   # and the input signature of your User Tower model.
-  - "user_features_view:about_embedding"          # Example: Precomputed embedding of user's 'about' text
-  - "user_features_view:headline_embedding"       # Example: Precomputed embedding of user's headline
+  - "user_profile_features:about_embedding"          # Example: Precomputed embedding of user's 'about' text
+  - "user_profile_features:headline_embedding"       # Example: Precomputed embedding of user's headline
   # - "user_features_view:onboarding_category_ids_embedding" # Example if category preferences are embedded
   # Add other raw or precomputed features the User Tower model expects.
   # For instance, if the model takes user_id directly for an ID embedding layer:
@@ -16,7 +16,7 @@ user_features_for_tower: # List of features needed by the User Tower model
   # The UserTowerPredictor and CandidateGenerationTransformer's preprocess method
   # will need to correctly handle these features and map them to the model's input tensor names.
 default_top_n_candidates: 100 # Default number of candidates to retrieve from Milvus
-milvus_embedding_field_name: "post_embedding_hf" # The field in Milvus storing the post embeddings
+milvus_embedding_field_name: "embedding" # The field in Milvus storing the post embeddings
 milvus_output_fields: # Fields to retrieve from Milvus alongside the ID
   - "post_id"
   - "category_id" # Useful for debugging or potential downstream filtering if not done in Milvus

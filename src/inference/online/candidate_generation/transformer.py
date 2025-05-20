@@ -237,9 +237,13 @@ class CandidateGenerationTransformer:
         if preferred_category_ids and isinstance(preferred_category_ids, list) and len(preferred_category_ids) > 0:
             # Assuming 'category_id' is a scalar field in Milvus.
             # If 'category_id' is an array and you need to check for overlap, the expression is more complex.
-            # For scalar 'category_id IN [1,2,3]'
-            cat_ids_str = ", ".join(map(str, preferred_category_ids))
-            expr = f"category_id IN [{cat_ids_str}]"
+            # Constructing filter as (category_id == val1 || category_id == val2 || ...)
+            # as an alternative to IN [...] to see if it resolves parsing issues.
+            if len(preferred_category_ids) == 1:
+                expr = f"category_id == {preferred_category_ids[0]}"
+            else:
+                individual_conditions = [f"category_id == {cid}" for cid in preferred_category_ids]
+                expr = f"({ ' || '.join(individual_conditions) })"
             print(f"Milvus search expression: {expr}")
         else:
             print("No preferred_category_ids provided or empty list, searching without category filter.")
@@ -269,15 +273,27 @@ class CandidateGenerationTransformer:
         if results:
             for hits in results: # Results is a list of Hits objects (one per query vector)
                 for hit in hits:
-                    # hit.entity.get('post_id') or hit.id if post_id is the primary key
-                    # The 'output_fields' determines what's in hit.entity
-                    if self.id_field_name in hit.entity:
-                        candidate_post_ids.append(str(hit.entity.get(self.id_field_name)))
+                    # The 'output_fields' determines what's in hit.entity.
+                    # Access field using hit.entity.get(field_name)
+                    retrieved_id = hit.entity.get(self.id_field_name)
+                    if retrieved_id is not None:
+                        candidate_post_ids.append(str(retrieved_id))
                     else:
-                        # If post_id is the primary key and not in output_fields, it might be in hit.id
-                        # This depends on Milvus version and how data was inserted.
-                        # It's safer to include the ID field in output_fields.
-                        print(f"Warning: '{self.id_field_name}' not found in Milvus hit entity. Available fields: {hit.entity.fields}")
+                        # If the primary key is the ID and it's not in output_fields,
+                        # it might be available as hit.id (especially if id_field_name is the primary key name).
+                        # However, it's best practice to include the ID field in output_fields.
+                        # For now, we'll log if it's not found via .get()
+                        all_available_fields = list(hit.entity.fields) # Get all fields present in the entity
+                        print(f"Warning: '{self.id_field_name}' not found directly in Milvus hit entity via .get(). Available fields: {all_available_fields}. Trying hit.id as fallback if id_field_name is primary.")
+                        # As a fallback, if the id_field_name is indeed the primary key, hit.id might contain it.
+                        # This behavior can vary, so relying on output_fields is safer.
+                        # Let's assume for now that if .get() fails, the field is truly missing from output.
+                        # If hit.id is relevant, the logic would be:
+                        # if self.id_field_name == collection_primary_key_name and hasattr(hit, 'id'):
+                        #    candidate_post_ids.append(str(hit.id))
+                        # else:
+                        #    print(f"Field '{self.id_field_name}' also not found as hit.id or not primary key.")
+                        pass # Field not found in entity
 
         print(f"Retrieved {len(candidate_post_ids)} candidate post_ids from Milvus.")
         return candidate_post_ids
