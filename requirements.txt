@@ -12,6 +12,7 @@ mlflow==2.13.0
 xgboost==2.0.3 # Added for ranking model
 lightgbm==4.3.0 # Added for ranking model
 joblib==1.4.2 # Often used with scikit-learn models for saving
-pymilvus # For Milvus vector database
-cassandra-driver==3.29.1 # For ScyllaDB/Cassandra connection 
+pymilvus==2.3.8 # For Milvus vector database (compatible with server v2.3.x)
+marshmallow<4.0.0 # Pin to v3.x for environs compatibility
+cassandra-driver==3.29.1 # For ScyllaDB/Cassandra connection
 tf-keras

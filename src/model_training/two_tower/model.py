@@ -1,7 +1,9 @@
 import tensorflow as tf
 from tensorflow.keras.layers import Embedding, Dense, Concatenate, Input
 from tensorflow.keras.models import Model
+import keras # For keras.saving.register_keras_serializable
 
+@keras.saving.register_keras_serializable()
 class UserTower(Model):
     def __init__(self, user_id_vocab_list, embedding_dim, name="user_tower", **kwargs): # Changed user_id_vocab_size to user_id_vocab_list
         super().__init__(name=name, **kwargs)
@@ -18,6 +20,17 @@ class UserTower(Model):
         # self.category_embedding = Embedding(...)
         self.dense_1 = Dense(128, activation="relu")
         self.dense_2 = Dense(embedding_dim, activation="relu") # Output embedding
+        # Store vocab list and embedding_dim for get_config
+        self.user_id_vocab_list = user_id_vocab_list
+        self.embedding_dim = embedding_dim
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "user_id_vocab_list": self.user_id_vocab_list,
+            "embedding_dim": self.embedding_dim,
+        })
+        return config
 
     def call(self, inputs):
         user_id_str = inputs["user_id"] # String tensor
@@ -49,6 +62,7 @@ class UserTower(Model):
         x = self.dense_1(concatenated_features)
         return self.dense_2(x)
 
+@keras.saving.register_keras_serializable()
 class PostTower(Model):
     def __init__(self, post_id_vocab_list, category_id_vocab_size, media_type_vocab_size, creator_id_vocab_size, embedding_dim, name="post_tower", **kwargs): # Changed post_id_vocab_size to post_id_vocab_list
         super().__init__(name=name, **kwargs)
@@ -68,6 +82,23 @@ class PostTower(Model):
         
         self.dense_1 = Dense(128, activation="relu")
         self.dense_2 = Dense(embedding_dim, activation="relu") # Output embedding
+        # Store args for get_config
+        self.post_id_vocab_list = post_id_vocab_list
+        self.category_id_vocab_size = category_id_vocab_size
+        self.media_type_vocab_size = media_type_vocab_size
+        self.creator_id_vocab_size = creator_id_vocab_size
+        self.embedding_dim = embedding_dim
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "post_id_vocab_list": self.post_id_vocab_list,
+            "category_id_vocab_size": self.category_id_vocab_size,
+            "media_type_vocab_size": self.media_type_vocab_size,
+            "creator_id_vocab_size": self.creator_id_vocab_size,
+            "embedding_dim": self.embedding_dim,
+        })
+        return config
 
     def call(self, inputs):
         post_id_str = inputs["post_id"] # String tensor

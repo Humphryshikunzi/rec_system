@@ -8,6 +8,8 @@ import mlflow
 import mlflow.tensorflow
 from feast import FeatureStore
 from datetime import datetime, timedelta
+import tempfile
+import shutil
 
 from model import UserTower, PostTower # TwoTowerModel (if used directly) or TFRS wrapper
 import data_utils # Assuming data_utils.py is in the same directory
@@ -378,54 +380,56 @@ def main(config_path):
         # --- 4. Save and Log Model Components ---
         print("Saving model components...")
 
-        # Define example inputs for MLflow model signatures
-        # User Tower Example Input
-        # Assuming about_embedding and headline_embedding have the same dimension as config['embedding_dim']
-        # If they have different, pre-defined dimensions, those should be used.
-        # For this example, let's use config['embedding_dim'] for them.
-        user_emb_dim = config['embedding_dim'] # Common dimension for user's own embeddings
-        user_inputs_example_for_signature = {
-            "user_id": tf.constant(["u_example_001"], dtype=tf.string).numpy(), # Convert to numpy
-            "about_embedding": tf.random.normal(shape=(1, user_emb_dim)).numpy(),
-            "headline_embedding": tf.random.normal(shape=(1, user_emb_dim)).numpy()
-        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            print(f"Using temporary directory for model export: {temp_dir}")
 
-        # Post Tower Example Input
-        actual_desc_emb_dim = config.get('description_embedding_dim', 384)
-        post_inputs_example_for_signature = {
-            "post_id": tf.constant(["p_example_001"], dtype=tf.string).numpy(), # Convert to numpy
-            "description_embedding": tf.random.normal(shape=(1, actual_desc_emb_dim)).numpy(),
-            "category_id": tf.constant([0], dtype=tf.int64).numpy(),
-            "media_type": tf.constant([0], dtype=tf.int64).numpy(),
-            "creator_id": tf.constant([0], dtype=tf.int64).numpy()
-        }
-        
-        # Save user tower
-        user_tower_path = f"user_tower_{run_id}"
-        user_tower.export(user_tower_path) # Use export for SavedModel format
-        mlflow.tensorflow.log_model(
-            model=user_tower,
-            artifact_path="user_tower",
-            input_example=user_inputs_example_for_signature,
-            registered_model_name=f"{config['mlflow_experiment_name']}-UserTower"
-        )
-        print(f"User tower saved and logged to MLflow as 'user_tower' and registered as {config['mlflow_experiment_name']}-UserTower.")
+            # Define example inputs for MLflow model signatures
+            # User Tower Example Input
+            # Assuming about_embedding and headline_embedding have the same dimension as config['embedding_dim']
+            # If they have different, pre-defined dimensions, those should be used.
+            # For this example, let's use config['embedding_dim'] for them.
+            user_emb_dim = config['embedding_dim'] # Common dimension for user's own embeddings
+            user_inputs_example_for_signature = {
+                "user_id": tf.constant(["u_example_001"], dtype=tf.string).numpy(), # Convert to numpy
+                "about_embedding": tf.random.normal(shape=(1, user_emb_dim)).numpy(),
+                "headline_embedding": tf.random.normal(shape=(1, user_emb_dim)).numpy()
+            }
 
-        # Save post tower
-        post_tower_path = f"post_tower_{run_id}"
-        post_tower.export(post_tower_path)
-        mlflow.tensorflow.log_model(
-            model=post_tower,
-            artifact_path="post_tower",
-            input_example=post_inputs_example_for_signature,
-            registered_model_name=f"{config['mlflow_experiment_name']}-PostTower"
-        )
-        print(f"Post tower saved and logged to MLflow as 'post_tower' and registered as {config['mlflow_experiment_name']}-PostTower.")
+            # Post Tower Example Input
+            actual_desc_emb_dim = config.get('description_embedding_dim', 384)
+            post_inputs_example_for_signature = {
+                "post_id": tf.constant(["p_example_001"], dtype=tf.string).numpy(), # Convert to numpy
+                "description_embedding": tf.random.normal(shape=(1, actual_desc_emb_dim)).numpy(),
+                "category_id": tf.constant([0], dtype=tf.int64).numpy(),
+                "media_type": tf.constant([0], dtype=tf.int64).numpy(),
+                "creator_id": tf.constant([0], dtype=tf.int64).numpy()
+            }
         
-        # Clean up local saved models (optional)
-        # import shutil
-        # shutil.rmtree(user_tower_path)
-        # shutil.rmtree(post_tower_path)
+            # Save user tower
+            user_tower_path = os.path.join(temp_dir, f"user_tower_{run_id}")
+            user_tower.export(user_tower_path) # Use export for SavedModel format
+            mlflow.tensorflow.log_model(
+                model=user_tower, # Can also pass user_tower_path here if preferred after export
+                artifact_path="user_tower",
+                input_example=user_inputs_example_for_signature,
+                registered_model_name=f"{config['mlflow_experiment_name']}-UserTower"
+            )
+            print(f"User tower saved to {user_tower_path}, logged to MLflow as 'user_tower' and registered as {config['mlflow_experiment_name']}-UserTower.")
+
+            # Save post tower
+            post_tower_path = os.path.join(temp_dir, f"post_tower_{run_id}")
+            post_tower.export(post_tower_path)
+            mlflow.tensorflow.log_model(
+                model=post_tower, # Can also pass post_tower_path here
+                artifact_path="post_tower",
+                input_example=post_inputs_example_for_signature,
+                registered_model_name=f"{config['mlflow_experiment_name']}-PostTower"
+            )
+            print(f"Post tower saved to {post_tower_path}, logged to MLflow as 'post_tower' and registered as {config['mlflow_experiment_name']}-PostTower.")
+            
+            # The temporary directory temp_dir and its contents (user_tower_path, post_tower_path)
+            # will be automatically cleaned up when the 'with' block exits.
+            # No need for manual shutil.rmtree(temp_dir) unless done outside the 'with' block.
 
         mlflow.log_artifact(config_path, "config")
         print("Training script finished successfully.")

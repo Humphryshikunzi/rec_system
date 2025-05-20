@@ -1,9 +1,26 @@
 import argparse
 import yaml
 import logging
+import sys
+import os
+
+# Add relevant directories to Python path
+# Path to src/inference/offline/index_posts_to_milvus.py
+script_dir = os.path.dirname(__file__)
+# Path to src/
+src_dir = os.path.abspath(os.path.join(script_dir, '..', '..'))
+# Path to src/model_training/two_tower/
+model_module_dir = os.path.join(src_dir, 'model_training', 'two_tower')
+
+sys.path.insert(0, src_dir) # To allow 'from model_training.two_tower.model import PostTower'
+sys.path.insert(0, model_module_dir) # To allow Keras to 'import model' if it looks for model.py
+
 import pandas as pd
 import mlflow
+import tensorflow as tf # Import tensorflow for custom_object_scope
 from pymilvus import connections, utility, Collection, CollectionSchema, FieldSchema, DataType
+# This import should still work because src_dir is on the path
+from model_training.two_tower.model import PostTower
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,8 +35,12 @@ def load_config(config_path):
 def load_post_tower_model(model_uri):
     """Loads the Post Tower model from MLflow."""
     logging.info(f"Loading Post Tower model from MLflow URI: {model_uri}")
+    logging.info(f"Current MLflow Tracking URI: {mlflow.get_tracking_uri()}")
     try:
-        model = mlflow.keras.load_model(model_uri)
+        # Changed from mlflow.keras.load_model to mlflow.tensorflow.load_model
+        # Use tf.keras.utils.custom_object_scope to make PostTower known
+        with tf.keras.utils.custom_object_scope({'PostTower': PostTower}):
+            model = mlflow.tensorflow.load_model(model_uri)
         logging.info("Post Tower model loaded successfully.")
         return model
     except Exception as e:
@@ -63,8 +84,9 @@ def create_milvus_collection(collection_name, dim):
 
     logging.info(f"Creating Milvus collection: {collection_name}")
     # Define schema
-    post_id_field = FieldSchema(name="post_id", dtype=DataType.INT64, is_primary=True, auto_id=False)
-    category_id_field = FieldSchema(name="category_id", dtype=DataType.INT64) # Assuming INT64, adjust if VARCHAR
+    # Changed post_id to VARCHAR to store string IDs like 'p_00001'
+    post_id_field = FieldSchema(name="post_id", dtype=DataType.VARCHAR, is_primary=True, auto_id=False, max_length=64)
+    category_id_field = FieldSchema(name="category_id", dtype=DataType.INT64)
     embedding_field = FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=dim)
     
     schema = CollectionSchema(
@@ -96,8 +118,31 @@ def create_index(collection, field_name="embedding"):
     logging.info(f"Collection '{collection.name}' loaded into memory.")
 
 
-def generate_and_index_embeddings(post_tower_model, posts_df, collection, batch_size, embedding_dim):
-    """Generates embeddings and ingests them into Milvus."""
+def build_field_vocabulary(df, field_name, oov_token="<OOV>", reserve_zero=True):
+    """Builds a vocabulary mapping for a given field from a DataFrame."""
+    unique_values = df[field_name].unique().tolist()
+    vocab = {}
+    start_index = 0
+    if reserve_zero: # Often 0 is reserved for padding or a special token
+        vocab[oov_token] = 0 # OOV token maps to 0
+        start_index = 1
+    
+    for i, value in enumerate(unique_values):
+        vocab[value] = i + start_index
+    
+    # Ensure OOV is in vocab if not reserving zero and it wasn't a unique value
+    if not reserve_zero and oov_token not in vocab and oov_token in unique_values: # Should not happen if oov_token is special
+        # This case is tricky, means OOV token was a real value.
+        # For simplicity, if not reserving zero, OOV will get the next available index if not present.
+        pass # It will be handled like any other unique value
+    elif not reserve_zero and oov_token not in vocab:
+         vocab[oov_token] = len(vocab) # Add OOV at the end if not present
+
+    logging.info(f"Built vocabulary for '{field_name}' with {len(vocab)} entries. OOV token '{oov_token}' maps to {vocab.get(oov_token)}. First few items: {list(vocab.items())[:5]}")
+    return vocab
+
+def generate_and_index_embeddings(post_tower_model, posts_df, collection, batch_size, embedding_dim, vocabs):
+    """Generates embeddings and ingests them into Milvus, using provided vocabularies for categorical features."""
     num_posts = len(posts_df)
     logging.info(f"Starting embedding generation and indexing for {num_posts} posts.")
 
@@ -144,106 +189,107 @@ def generate_and_index_embeddings(post_tower_model, posts_df, collection, batch_
         # The actual keys must match the input layer names of your Keras model.
         
         # This is a critical part that needs to be correct for your specific model.
-        # Let's assume the model expects inputs like this:
-        # (This is a generic example, adjust to your model's input names and types)
-        input_data_for_model = {
-            # Assuming 'description_embedding' is a column of lists/arrays that need to be stacked
-            # If your model takes raw text, you'd process 'description_text' here.
-            # For now, let's assume 'description_embedding' is the primary feature.
-            # This part needs careful alignment with your actual PostTower model.
-            # If 'description_embedding' is already the final embedding, this step might be simpler.
-            # However, the PostTower usually *generates* the final embedding from multiple inputs.
-            
-            # Example: if your model expects 'post_id', 'category_id', and some text-derived embedding
-            # This is a placeholder. You MUST adapt this to your model's input signature.
-            "post_id_input": batch_df['post_id'].to_numpy().astype('int64'),
-            "category_id_input": batch_df['category_id'].to_numpy().astype('int64'),
-            # "description_embedding_input": np.array(batch_df['description_embedding'].tolist()).astype('float32') # If this is an input
-        }
-        # If your model only takes the description embedding (e.g., from a sentence transformer)
-        # and you want to store that directly, the model loading part might be different.
-        # But the task is to use the "Post Tower" model.
-        
-        # The Post Tower model from the TwoTower architecture typically takes multiple features
-        # (like post_id, category_id, text embeddings) and processes them through its layers.
-        # We need to ensure the input_data_for_model matches what post_tower_model.predict expects.
-        # For a tf.keras.Model, this is often a dictionary mapping input layer names to numpy arrays,
-        # or a list of numpy arrays if the model has multiple unnamed inputs.
-
-        # Let's assume the model's predict function can handle a dictionary of features
-        # where keys are input names. You might need to inspect your saved model's input signature.
-        # For example, if your PostTower has input layers named 'post_id_in', 'category_id_in', 'desc_emb_in':
-        # model_input_dict = {
-        #     'post_id_in': batch_df['post_id'].values,
-        #     'category_id_in': batch_df['category_id'].values,
-        #     'desc_emb_in': np.stack(batch_df['description_embedding'].values) # if it's a list of embeddings
-        # }
-        # embeddings = post_tower_model.predict(model_input_dict)
-
-        # For now, let's make a strong assumption that the model takes these three inputs
-        # and their names are 'post_id', 'category_id', 'description_embedding'.
-        # This is very likely to need adjustment.
-        
-        # A more robust way is to inspect model.input_names
-        # For now, a simplified approach:
-        # This assumes the model takes a dictionary of numpy arrays.
         # The actual input preparation is CRITICAL and depends on your model.
-        # Let's assume the model takes 'post_id', 'category_id', and 'description_embedding'
-        # and 'description_embedding' is already in the correct numerical format in the DataFrame.
+        # The PostTower model expects specific input keys: "post_id", "category_id",
+        # "media_type", "creator_id", "description_embedding".
         
-        # This part is highly model-specific.
-        # If 'description_embedding' is already the output of a text embedder and is one of the inputs to the PostTower
         import numpy as np
+        # Ensure dtypes are correct for the model's input signature
+        # PostTower expects:
+        # "post_id": string tensor
+        # "description_embedding": float32 tensor
+        # "category_id": int64 tensor (indices for embedding)
+        # "media_type": int64 tensor (indices for embedding)
+        # "creator_id": int64 tensor (indices for embedding)
+
         prepared_inputs = {
-            # These keys must match the input names of your Keras model's layers
-            # Example:
-            "input_post_id": batch_df['post_id'].values.astype(np.int64),
-            "input_category_id": batch_df['category_id'].values.astype(np.int64),
-            # "input_description_embedding": np.stack(batch_df['description_embedding'].values).astype(np.float32) # If this is an input
+            "post_id": batch_df['post_id'].values, # Keep as strings
         }
-        # If your model only takes one input (e.g., concatenated features or just text tokens)
-        # then adjust accordingly.
-        # For a TwoTower's PostTower, it's common to have multiple discrete inputs.
-        # The problem states "The Post Tower expects specific inputs (e.g., post_id for ID embedding,
-        # description_embedding, category_id for category embedding)."
-        # So, we'll assume these are the inputs.
-        
-        # Check if 'description_embedding' column exists and use it.
-        # Otherwise, this part needs to be adapted to generate it from 'description_text'
-        # or fetch it. The config points to 'posts_with_embeddings.parquet'.
-        if 'description_embedding' in batch_df.columns:
-            # Assuming description_embedding is a list/array of floats
-            desc_embeddings_np = np.array(batch_df['description_embedding'].tolist(), dtype=np.float32)
-            if desc_embeddings_np.shape[1] != prepared_inputs["input_post_id"].shape[0] and desc_embeddings_np.ndim == 2 : # if it's already (batch, dim)
-                 pass # it's fine
-            elif desc_embeddings_np.ndim == 1 and len(desc_embeddings_np) == batch_df.shape[0]: # if it's a list of embeddings
-                 desc_embeddings_np = np.stack(desc_embeddings_np)
 
-            # Ensure the embedding dimension matches what the model might expect for this input
-            # Or, if this IS the embedding to be fine-tuned by the tower.
-            prepared_inputs["input_description_embedding"] = desc_embeddings_np
+        # Map categorical string features to integer indices using vocabs
+        # The PostTower model expects integer indices for these Embedding layers.
+        # OOV_TOKEN is assumed to map to index 0 if reserve_zero=True in build_field_vocabulary.
+        oov_idx_category = vocabs['category_id'].get("<OOV>", 0)
+        prepared_inputs["category_id"] = batch_df['category_id'].map(vocabs['category_id']).fillna(oov_idx_category).to_numpy().astype(np.int64)
+
+        if 'media_type' in batch_df.columns:
+            if 'media_type' in vocabs:
+                oov_idx_media_type = vocabs['media_type'].get("<OOV>", 0)
+                prepared_inputs["media_type"] = batch_df['media_type'].map(vocabs['media_type']).fillna(oov_idx_media_type).to_numpy().astype(np.int64)
+            else:
+                logging.error("'media_type' vocabulary not found. Ensure it's built and passed correctly.")
+                raise KeyError("'media_type' vocabulary missing.")
         else:
-            # This case should be handled: either error out or generate embeddings here.
-            # For now, relying on 'posts_with_embeddings.parquet'.
-            logging.warning("'description_embedding' not found in batch. Model might fail if it expects it.")
-            # You might need to pass placeholder or handle this.
-            # For a robust script, this should be an error or a feature generation step.
+            logging.error("'media_type' column not found in batch_df. This is a required input for the PostTower model.")
+            raise KeyError("'media_type' column missing from input data.")
 
-        # Filter prepared_inputs to only include keys that are actual inputs to the model
-        # This is a safer approach if model.input_names is available
-        # For now, assuming the model takes all provided inputs.
+        if 'creator_id' in batch_df.columns:
+            # Note: The PostTower model uses an Embedding layer for creator_id, implying it expects integer indices.
+            # If creator_id values in the data are strings like 'u_xxxx', they need to be mapped to integers.
+            # The current PostTower model does NOT have a StringLookup layer for creator_id.
+            # This vocabulary mapping handles the conversion from string 'u_xxxx' to integer indices.
+            if 'creator_id' in vocabs:
+                oov_idx_creator_id = vocabs['creator_id'].get("<OOV>", 0)
+                prepared_inputs["creator_id"] = batch_df['creator_id'].map(vocabs['creator_id']).fillna(oov_idx_creator_id).to_numpy().astype(np.int64)
+            else:
+                logging.error("'creator_id' vocabulary not found. Ensure it's built and passed correctly.")
+                raise KeyError("'creator_id' vocabulary missing.")
+        else:
+            logging.error("'creator_id' column not found in batch_df. This is a required input for the PostTower model.")
+            raise KeyError("'creator_id' column missing from input data.")
+
+        if 'description_embedding' in batch_df.columns:
+            desc_embeddings_list = batch_df['description_embedding'].tolist()
+            if not desc_embeddings_list and len(batch_df) > 0 : # If list is empty but batch is not
+                 logging.error("description_embedding column is present but resulted in an empty list for a non-empty batch.")
+                 raise ValueError("description_embedding data is missing for the batch.")
+            
+            if desc_embeddings_list: # Proceed only if list is not empty
+                # Validate structure of embeddings before stacking
+                first_elem_len = -1
+                if isinstance(desc_embeddings_list[0], (list, np.ndarray)):
+                    first_elem_len = len(desc_embeddings_list[0])
+                else:
+                    logging.error(f"First element of description_embedding is not a list/array. Type: {type(desc_embeddings_list[0])}")
+                    raise ValueError("description_embedding column elements are not lists/arrays.")
+
+                if not all(isinstance(e, (list, np.ndarray)) and len(e) == first_elem_len for e in desc_embeddings_list):
+                    logging.error("description_embedding column contains non-uniform elements (varying lengths or types).")
+                    # Example of non-uniform data:
+                    # for i, e in enumerate(desc_embeddings_list):
+                    #    if not (isinstance(e, (list, np.ndarray)) and len(e) == first_elem_len):
+                    #        logging.debug(f"Problematic element at index {i}: type {type(e)}, len {len(e) if hasattr(e, '__len__') else 'N/A'}")
+                    raise ValueError("description_embedding column has inconsistent data for stacking.")
+                
+                try:
+                    desc_embeddings_np = np.array(desc_embeddings_list, dtype=np.float32)
+                except Exception as e:
+                    logging.error(f"Error converting description_embedding to numpy array: {e}")
+                    raise
+                
+                if desc_embeddings_np.ndim != 2 and len(batch_df) > 0:
+                    logging.error(f"description_embedding is not 2D after processing. Shape: {desc_embeddings_np.shape}. Expected (batch_size, embedding_dim).")
+                    raise ValueError(f"description_embedding could not be converted to a 2D array. Shape: {desc_embeddings_np.shape}")
+                prepared_inputs["description_embedding"] = desc_embeddings_np
+            elif len(batch_df) > 0: # batch_df not empty, but desc_embeddings_list is empty
+                logging.error("description_embedding column is present but resulted in an empty list for a non-empty batch.")
+                raise ValueError("description_embedding data is missing for the batch.")
+            # If batch_df is empty, desc_embeddings_list will also be empty, and this is fine (loop won't run).
+
+        else:
+            logging.error("'description_embedding' column not found in batch_df. This is a required input for the PostTower model.")
+            raise KeyError("'description_embedding' column missing from input data.")
         
         try:
-            # The .predict() method might take a dict or a list of arrays.
-            # If it's a list, the order matters and must match model.inputs.
-            # If it's a dict, keys must match input layer names.
-            # We need to know the exact input structure of the saved Post Tower model.
-            # Let's assume it's a dictionary for now.
-            # You might need to convert this dict to a list in the correct order if model.predict expects a list.
-            # Example: model_inputs_list = [prepared_inputs[name] for name in model.input_names]
-            # embeddings = post_tower_model.predict(model_inputs_list, batch_size=batch_size)
+            # Ensure all required inputs for the PostTower model are present in prepared_inputs
+            required_model_keys = {"post_id", "category_id", "media_type", "creator_id", "description_embedding"}
+            missing_keys = required_model_keys - set(prepared_inputs.keys())
+            if missing_keys:
+                logging.error(f"Missing required keys for model prediction: {missing_keys}. Provided keys: {list(prepared_inputs.keys())}")
+                # This check is crucial before calling predict.
+                # It indicates a mismatch between data provided and model's expectations.
+                raise ValueError(f"Data preparation step failed to provide all required model inputs. Missing: {missing_keys}")
 
-            # A common way Keras models are saved allows prediction with a dictionary:
             embeddings = post_tower_model.predict(prepared_inputs, batch_size=len(batch_df))
             logging.info(f"Generated {embeddings.shape[0]} embeddings with dimension {embeddings.shape[1]}.")
 
@@ -265,7 +311,8 @@ def generate_and_index_embeddings(post_tower_model, posts_df, collection, batch_
 
         # Prepare data for Milvus insertion
         post_ids_to_insert = batch_df['post_id'].tolist()
-        category_ids_to_insert = batch_df['category_id'].tolist() # Ensure this is INT64 or compatible
+        # Use the integer-mapped category_id from prepared_inputs for Milvus insertion
+        category_ids_to_insert = prepared_inputs["category_id"].tolist()
         embeddings_to_insert = embeddings.tolist() # Milvus expects list of lists for FLOAT_VECTOR
 
         data_to_insert = [
@@ -274,9 +321,17 @@ def generate_and_index_embeddings(post_tower_model, posts_df, collection, batch_
             embeddings_to_insert
         ]
         
+        # Detailed logging before insertion
+        logging.debug(f"Attempting to insert batch {i // batch_size + 1}")
+        logging.debug(f"  post_ids_to_insert (len {len(post_ids_to_insert)}): {post_ids_to_insert[:3]}")
+        logging.debug(f"  post_ids type: {type(post_ids_to_insert[0]) if post_ids_to_insert else 'N/A'}")
+        logging.debug(f"  category_ids_to_insert (len {len(category_ids_to_insert)}): {category_ids_to_insert[:3]}")
+        logging.debug(f"  category_ids type: {type(category_ids_to_insert[0]) if category_ids_to_insert else 'N/A'}")
+        logging.debug(f"  embeddings_to_insert (len {len(embeddings_to_insert)}): First embedding shape/type: {np.array(embeddings_to_insert[0]).shape if embeddings_to_insert else 'N/A'}, {type(embeddings_to_insert[0][0]) if embeddings_to_insert and embeddings_to_insert[0] else 'N/A'}")
+
         try:
             insert_result = collection.insert(data_to_insert)
-            logging.info(f"Inserted batch {i // batch_size + 1} into Milvus. Insert count: {insert_result.insert_count}")
+            logging.info(f"Successfully inserted batch {i // batch_size + 1} into Milvus. Insert count: {insert_result.insert_count}")
         except Exception as e:
             logging.error(f"Error inserting batch {i // batch_size + 1} into Milvus: {e}")
             # Consider retry logic or skipping
@@ -285,7 +340,9 @@ def generate_and_index_embeddings(post_tower_model, posts_df, collection, batch_
     logging.info("Flushing collection to ensure data persistence.")
     collection.flush()
     logging.info(f"Collection '{collection.name}' flushed. Total entities: {collection.num_entities}")
-
+    # Add a final check
+    if collection.num_entities == 0 and num_posts > 0:
+        logging.warning("Warning: Flushing complete, but no entities were inserted into the collection.")
 
 def main(config_path):
     config = load_config(config_path)
@@ -304,13 +361,37 @@ def main(config_path):
     # 2. Load Data
     posts_df = load_post_data(post_data_path)
 
+    # Build vocabularies for categorical string features
+    # These columns are expected by the PostTower model as integer inputs for Embedding layers
+    categorical_cols_for_vocab = []
+    if 'category_id' in posts_df.columns and posts_df['category_id'].dtype == 'object':
+        categorical_cols_for_vocab.append('category_id')
+    if 'media_type' in posts_df.columns and posts_df['media_type'].dtype == 'object':
+        categorical_cols_for_vocab.append('media_type')
+    if 'creator_id' in posts_df.columns and posts_df['creator_id'].dtype == 'object': # creator_id is often string like 'u_xxx'
+        categorical_cols_for_vocab.append('creator_id')
+    
+    vocabs = {}
+    if categorical_cols_for_vocab:
+        logging.info(f"Building vocabularies for: {categorical_cols_for_vocab}")
+        for col in categorical_cols_for_vocab:
+            vocabs[col] = build_field_vocabulary(posts_df, col)
+    else:
+        logging.info("No string-based categorical columns found needing vocabulary building (category_id, media_type, creator_id). Assuming they are already integer indices if present.")
+
+
     # 3. Connect to Milvus & Setup Collection
     connect_to_milvus(milvus_host, milvus_port)
     milvus_collection = create_milvus_collection(collection_name, embedding_dim)
-    create_index(milvus_collection) # Create index after collection creation, before loading if possible
+    # Ensure index is created *after* schema is confirmed and collection is valid
+    if milvus_collection:
+         create_index(milvus_collection)
+    else:
+        logging.error("Milvus collection object is None, cannot create index. Exiting.")
+        return # or raise an error
 
     # 4. Generate Embeddings & Index
-    generate_and_index_embeddings(post_tower_model, posts_df, milvus_collection, batch_size, embedding_dim)
+    generate_and_index_embeddings(post_tower_model, posts_df, milvus_collection, batch_size, embedding_dim, vocabs)
 
     logging.info("Post indexing to Milvus completed successfully.")
 

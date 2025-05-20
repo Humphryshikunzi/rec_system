@@ -1,7 +1,7 @@
 embedding_dim: 64
 learning_rate: 0.001
 batch_size: 512
-epochs: 1
+epochs: 2
 feast_repo_path: "src/feature_repo" # Relative to project root
 mlflow_experiment_name: "TwoTowerRecommender"
 user_tower_features:

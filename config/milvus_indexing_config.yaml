@@ -1,4 +1,4 @@
-mlflow_post_tower_uri: "models:/TwoTowerPostTower/Production" # Example MLflow URI
+mlflow_post_tower_uri: "models:/TwoTowerRecommender-PostTower/latest" # Example MLflow URI
 milvus_host: "localhost"
 milvus_port: "19530"
 milvus_collection_name: "recsys_poc_posts"
