@@ -15,7 +15,11 @@ class FilterService:
             scylla_port (int): The port number for ScyllaDB.
         """
         try:
-            self.cluster = Cluster(contact_points=scylla_contact_points, port=scylla_port)
+            self.cluster = Cluster(
+                contact_points=scylla_contact_points,
+                port=scylla_port,
+                protocol_version=4 # Re-adding explicit protocol version
+            )
             self.session = self.cluster.connect()
             self.keyspace = scylla_keyspace
             self.session.set_keyspace(self.keyspace)
@@ -41,11 +45,22 @@ class FilterService:
             return set()
 
         try:
-            query = SimpleStatement(
+            if not post_ids or not interaction_types: # Ensure lists are not empty before creating placeholders
+                return set()
+
+            post_id_placeholders = ', '.join(['?'] * len(post_ids))
+            interaction_type_placeholders = ', '.join(['?'] * len(interaction_types))
+
+            query_string = (
                 f"SELECT post_id FROM {self.keyspace}.user_post_interactions "
-                f"WHERE user_id = %s AND post_id IN %s AND interaction_type IN %s"
+                f"WHERE user_id = ? AND post_id IN ({post_id_placeholders}) AND interaction_type IN ({interaction_type_placeholders})"
             )
-            rows = self.session.execute(query, (user_id, tuple(post_ids), tuple(interaction_types)))
+            
+            params = [user_id] + list(post_ids) + list(interaction_types)
+            
+            # Use a prepared statement
+            prepared_statement = self.session.prepare(query_string)
+            rows = self.session.execute(prepared_statement, params)
             interacted_post_ids = {row.post_id for row in rows}
             logger.debug(f"User {user_id} interacted with posts: {interacted_post_ids} for types {interaction_types}")
             return interacted_post_ids

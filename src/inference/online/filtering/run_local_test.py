@@ -13,7 +13,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Determine the base directory of the project
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# SCRIPT_DIR is .../src/inference/online/filtering
+# We want to go up 4 levels to reach the project root
+BASE_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "../../../../"))
 CONFIG_PATH = os.path.join(BASE_DIR, 'config', 'filtering_service_config.yaml')
 
 
