@@ -106,4 +106,4 @@ media/
 
 /artifacts
 /mlruns 
-/docker/volumes
+/docker/milvus/volumes
